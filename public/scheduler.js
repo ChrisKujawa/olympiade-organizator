@@ -99,13 +99,15 @@ export function calculateGameResults(plan, gameId) {
   const rankedResults = [...totals.values()]
     .sort((left, right) => right.wins - left.wins || left.losses - right.losses || left.teamId.localeCompare(right.teamId));
 
-  let previousWins = null;
+  let previousRecord = null;
   let currentRank = 0;
 
   return rankedResults.map((result, index) => {
-    if (previousWins !== result.wins) {
+    const record = `${result.wins}:${result.losses}`;
+
+    if (previousRecord !== record) {
       currentRank = index + 1;
-      previousWins = result.wins;
+      previousRecord = record;
     }
 
     return {
