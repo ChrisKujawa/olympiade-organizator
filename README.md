@@ -16,7 +16,7 @@ Then open <http://localhost:4173>.
 
 ## Deploy on GitHub Pages
 
-The included GitHub Actions workflow validates the app on pushes to `main`. It can also deploy the static `public/` directory from a manual workflow run once GitHub Pages is available for the repository. Private repositories require a GitHub plan that supports Pages, or the repository can be made public.
+The included GitHub Actions workflow validates the app and deploys the static `public/` directory to GitHub Pages on pushes to `main`.
 
 ## Features
 

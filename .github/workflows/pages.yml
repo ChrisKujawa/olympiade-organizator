@@ -31,7 +31,6 @@ jobs:
         run: npm run check
 
   deploy:
-    if: github.event_name == 'workflow_dispatch'
     needs: test
     runs-on: ubuntu-latest
     environment:
@@ -43,8 +42,6 @@ jobs:
 
       - name: Set up Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload static app
         uses: actions/upload-pages-artifact@v3
