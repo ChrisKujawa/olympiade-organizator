@@ -13,7 +13,7 @@ test('service worker precaches every first-party app module needed offline', asy
 test('service worker cache version is bumped for current app shell', async () => {
   const serviceWorker = await readFile(new URL('../public/service-worker.js', import.meta.url), 'utf8');
 
-  assert.match(serviceWorker, /olympiade-organizator-v12/);
+  assert.match(serviceWorker, /olympiade-organizator-v13/);
 });
 
 function escapeRegExp(value) {

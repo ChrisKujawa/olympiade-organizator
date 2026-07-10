@@ -4,7 +4,6 @@ import {
   createMatchups,
   generateGamePlan,
   getMatchupParticipants,
-  getRoundsMissingTeamPairs,
   matchResultKey,
   normalizeRankPoints,
   normalizePlayMode,
@@ -16,6 +15,7 @@ import {
   createEmptyState,
   createGame,
   createTeam,
+  buildPlanWarning,
   deserializeState,
   normalizeState,
   removeGame,
@@ -265,7 +265,7 @@ function renderPlan() {
   state.plan.matchResults ??= {};
   state.plan.results ??= {};
 
-  const warning = getPlanWarning();
+  const warning = buildPlanWarning(state);
 
   if (warning) {
     elements.planWarning.textContent = warning;
@@ -470,38 +470,6 @@ function loadState() {
   }
 
   return normalizeState(JSON.parse(rawState));
-}
-
-function getPlanWarning() {
-  const plannedTeamIds = new Set(state.plan.teamIds);
-  const plannedGameIds = new Set(state.plan.gameIds);
-
-  if (state.teams.some((team) => !plannedTeamIds.has(team.id))) {
-    return 'Some teams were added after this plan was generated. Regenerate rounds to include them.';
-  }
-
-  if (state.games.some((game) => !plannedGameIds.has(game.id))) {
-    return 'Some games were added after this plan was generated. Regenerate rounds to include them.';
-  }
-
-  if (state.games.some((game) => plannedGameIds.has(game.id) && normalizePlayMode(game.playMode) !== normalizePlayMode(state.plan.rounds.find((round) => round.gameId === game.id)?.playMode))) {
-    return 'A game play mode changed after this plan was generated. Regenerate rounds to apply it.';
-  }
-
-  const roundsMissingPairs = getRoundsMissingTeamPairs(state.plan.teamIds, state.plan.rounds);
-
-  if (roundsMissingPairs.length > 0) {
-    const firstRoundWithMissingPairs = roundsMissingPairs[0];
-    const game = findById(state.games, firstRoundWithMissingPairs.gameId);
-    const examples = firstRoundWithMissingPairs.missingPairs
-      .slice(0, 3)
-      .map((pair) => pair.map((teamId) => findById(state.teams, teamId)?.name ?? 'Removed team').join(' vs '))
-      .join(', ');
-
-    return `${game?.name ?? 'A game'} does not include every team-vs-team matchup yet. Regenerate the plan. Missing: ${examples}${firstRoundWithMissingPairs.missingPairs.length > 3 ? ', ...' : ''}`;
-  }
-
-  return '';
 }
 
 function findById(items, id) {

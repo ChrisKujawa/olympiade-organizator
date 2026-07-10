@@ -1,4 +1,4 @@
-import { normalizePlayMode, normalizeRankPoints } from './scheduler.js';
+import { getRoundsMissingTeamPairs, normalizePlayMode, normalizeRankPoints } from './scheduler.js';
 
 export function createEmptyState() {
   return {
@@ -177,6 +177,42 @@ export function normalizeState(candidate, createId = createStateId) {
   };
 }
 
+export function buildPlanWarning(state) {
+  if (!state.plan) {
+    return '';
+  }
+
+  const plannedTeamIds = new Set(state.plan.teamIds);
+  const plannedGameIds = new Set(state.plan.gameIds);
+
+  if (state.teams.some((team) => !plannedTeamIds.has(team.id))) {
+    return 'Some teams were added after this plan was generated. Regenerate rounds to include them.';
+  }
+
+  if (state.games.some((game) => !plannedGameIds.has(game.id))) {
+    return 'Some games were added after this plan was generated. Regenerate rounds to include them.';
+  }
+
+  if (state.games.some((game) => plannedGameIds.has(game.id) && normalizePlayMode(game.playMode) !== normalizePlayMode(state.plan.rounds.find((round) => round.gameId === game.id)?.playMode))) {
+    return 'A game play mode changed after this plan was generated. Regenerate rounds to apply it.';
+  }
+
+  const roundsMissingPairs = getRoundsMissingTeamPairs(state.plan.teamIds, state.plan.rounds);
+
+  if (roundsMissingPairs.length > 0) {
+    const firstRoundWithMissingPairs = roundsMissingPairs[0];
+    const game = findById(state.games, firstRoundWithMissingPairs.gameId);
+    const examples = firstRoundWithMissingPairs.missingPairs
+      .slice(0, 3)
+      .map((pair) => pair.map((teamId) => findById(state.teams, teamId)?.name ?? 'Removed team').join(' vs '))
+      .join(', ');
+
+    return `${game?.name ?? 'A game'} does not include every team-vs-team matchup yet. Regenerate the plan. Missing: ${examples}${firstRoundWithMissingPairs.missingPairs.length > 3 ? ', ...' : ''}`;
+  }
+
+  return '';
+}
+
 function normalizePlan(plan) {
   return {
     ...plan,
@@ -185,8 +221,35 @@ function normalizePlan(plan) {
     rankPoints: Array.isArray(plan.rankPoints) ? plan.rankPoints.map(Number).filter(Number.isFinite) : [],
     matchResults: plan.matchResults && typeof plan.matchResults === 'object' ? { ...plan.matchResults } : {},
     results: plan.results && typeof plan.results === 'object' ? { ...plan.results } : {},
-    rounds: Array.isArray(plan.rounds) ? plan.rounds : []
+    rounds: Array.isArray(plan.rounds) ? plan.rounds.map(normalizeRound) : []
   };
+}
+
+function normalizeRound(round) {
+  return {
+    ...round,
+    id: String(round.id ?? ''),
+    gameId: String(round.gameId ?? ''),
+    playMode: normalizePlayMode(round.playMode),
+    teamIds: Array.isArray(round.teamIds) ? round.teamIds.map(String) : [],
+    matchups: Array.isArray(round.matchups) ? round.matchups.map(normalizeMatchup) : []
+  };
+}
+
+function normalizeMatchup(matchup) {
+  return {
+    ...matchup,
+    id: String(matchup.id ?? ''),
+    bracketRound: Number.isInteger(Number(matchup.bracketRound)) ? Number(matchup.bracketRound) : 1,
+    teamIds: Array.isArray(matchup.teamIds) ? matchup.teamIds.map(String) : [],
+    ...(Array.isArray(matchup.sourceMatchIds)
+      ? { sourceMatchIds: matchup.sourceMatchIds.map(String) }
+      : {})
+  };
+}
+
+function findById(items, id) {
+  return items.find((item) => item.id === id);
 }
 
 function clonePlan(plan) {

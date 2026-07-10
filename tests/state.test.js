@@ -4,6 +4,7 @@ import { generateGamePlan, matchResultKey, PLAY_MODES, resultKey } from '../publ
 import {
   addGame,
   addTeam,
+  buildPlanWarning,
   createEmptyState,
   createGame,
   createTeam,
@@ -99,6 +100,58 @@ test('normalizeState supports imported legacy data and defaults missing fields',
   });
 });
 
+test('normalizeState normalizes malformed imported rounds and matchups', () => {
+  const normalizedState = normalizeState({
+    plan: {
+      gameIds: [1],
+      teamIds: [2],
+      rounds: [
+        {
+          id: 3,
+          gameId: 1,
+          playMode: 'bad-mode',
+          teamIds: [2, 4],
+          matchups: [
+            {
+              id: 5,
+              bracketRound: '2',
+              teamIds: [2],
+              sourceMatchIds: [8, 9]
+            },
+            {
+              id: null,
+              bracketRound: 'bad',
+              teamIds: 'not-array'
+            }
+          ]
+        }
+      ]
+    }
+  });
+
+  assert.deepEqual(normalizedState.plan.rounds, [
+    {
+      id: '3',
+      gameId: '1',
+      playMode: PLAY_MODES.ROUND_ROBIN,
+      teamIds: ['2', '4'],
+      matchups: [
+        {
+          id: '5',
+          bracketRound: 2,
+          teamIds: ['2'],
+          sourceMatchIds: ['8', '9']
+        },
+        {
+          id: '',
+          bracketRound: 1,
+          teamIds: []
+        }
+      ]
+    }
+  ]);
+});
+
 test('serializeState and deserializeState round trip import/export data', () => {
   const state = {
     teams: [{ id: 'team-a', name: 'A', members: ['Ada'] }],
@@ -174,6 +227,56 @@ test('removeGame deletes game and cleans generated plan references/results', () 
   assert.deepEqual(nextState.plan.matchResults, {
     [matchResultKey('game-2', gameTwoMatch.id)]: { winnerTeamId: 'team-a' }
   });
+});
+
+test('buildPlanWarning reports no warning for current complete plans', () => {
+  assert.equal(buildPlanWarning(createPlannedState()), '');
+});
+
+test('buildPlanWarning reports teams added after plan generation', () => {
+  const state = {
+    ...createPlannedState(),
+    teams: [
+      ...createPlannedState().teams,
+      { id: 'team-new', name: 'New', members: [] }
+    ]
+  };
+
+  assert.equal(buildPlanWarning(state), 'Some teams were added after this plan was generated. Regenerate rounds to include them.');
+});
+
+test('buildPlanWarning reports games added after plan generation', () => {
+  const state = {
+    ...createPlannedState(),
+    games: [
+      ...createPlannedState().games,
+      { id: 'game-new', name: 'New', notes: '', playMode: PLAY_MODES.ROUND_ROBIN }
+    ]
+  };
+
+  assert.equal(buildPlanWarning(state), 'Some games were added after this plan was generated. Regenerate rounds to include them.');
+});
+
+test('buildPlanWarning reports play mode changes after plan generation', () => {
+  const state = createPlannedState();
+  const changedState = updateGame(state, 'game-1', { playMode: PLAY_MODES.KNOCKOUT });
+
+  assert.equal(buildPlanWarning(changedState), 'A game play mode changed after this plan was generated. Regenerate rounds to apply it.');
+});
+
+test('buildPlanWarning reports incomplete round-robin matchup coverage', () => {
+  const state = createPlannedState();
+  const brokenState = {
+    ...state,
+    plan: {
+      ...state.plan,
+      rounds: state.plan.rounds.map((round) => round.gameId === 'game-1'
+        ? { ...round, matchups: round.matchups.slice(0, 1) }
+        : round)
+    }
+  };
+
+  assert.match(buildPlanWarning(brokenState), /Round robin does not include every team-vs-team matchup yet/);
 });
 
 function createPlannedState() {
