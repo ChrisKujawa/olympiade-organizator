@@ -10,14 +10,23 @@ import {
   normalizePlayMode,
   PLAY_MODES,
 } from './scheduler.js';
+import {
+  addGame,
+  addTeam,
+  createEmptyState,
+  createGame,
+  createTeam,
+  deserializeState,
+  normalizeState,
+  removeGame,
+  removeTeam,
+  serializeState,
+  splitMembers,
+  updateGame,
+  updateTeam
+} from './state.js';
 
 const storageKey = 'olympiade-organizator:v1';
-
-const initialState = {
-  teams: [],
-  games: [],
-  plan: null
-};
 
 let state = loadState();
 let installPrompt = null;
@@ -57,11 +66,7 @@ elements.teamForm.addEventListener('submit', (event) => {
     return;
   }
 
-  state.teams.push({
-    id: crypto.randomUUID(),
-    name,
-    members: splitLines(elements.teamMembers.value)
-  });
+  state = addTeam(state, createTeam(name, elements.teamMembers.value));
 
   elements.teamForm.reset();
   persistAndRender('Team added.');
@@ -75,12 +80,7 @@ elements.gameForm.addEventListener('submit', (event) => {
     return;
   }
 
-  state.games.push({
-    id: crypto.randomUUID(),
-    name,
-    notes: elements.gameNotes.value.trim(),
-    playMode: normalizePlayMode(elements.gamePlayMode.value)
-  });
+  state = addGame(state, createGame(name, elements.gameNotes.value, elements.gamePlayMode.value));
 
   elements.gameForm.reset();
   persistAndRender('Game added.');
@@ -98,7 +98,7 @@ elements.generatePlan.addEventListener('click', () => {
 });
 
 elements.exportData.addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const blob = new Blob([serializeState(state)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -118,8 +118,7 @@ elements.importFile.addEventListener('change', async () => {
     return;
   }
 
-  const importedState = JSON.parse(await file.text());
-  state = normalizeState(importedState);
+  state = deserializeState(await file.text());
   elements.importFile.value = '';
   persistAndRender('Data imported.');
 });
@@ -129,7 +128,7 @@ elements.resetData.addEventListener('click', () => {
     return;
   }
 
-  state = structuredClone(initialState);
+  state = createEmptyState();
   persistAndRender('All local data removed.');
 });
 
@@ -188,18 +187,17 @@ function renderTeams() {
     membersInput.value = team.members.join('\n');
 
     nameInput.addEventListener('input', () => {
-      team.name = nameInput.value;
+      state = updateTeam(state, team.id, { name: nameInput.value });
       persistAndRender();
     });
 
     membersInput.addEventListener('input', () => {
-      team.members = splitLines(membersInput.value);
+      state = updateTeam(state, team.id, { members: splitMembers(membersInput.value) });
       persistAndRender();
     });
 
     removeButton.addEventListener('click', () => {
-      state.teams = state.teams.filter((existingTeam) => existingTeam.id !== team.id);
-      removeTeamFromPlan(team.id);
+      state = removeTeam(state, team.id);
       persistAndRender('Team removed.');
     });
 
@@ -231,23 +229,22 @@ function renderGames() {
     notesInput.value = game.notes;
 
     nameInput.addEventListener('input', () => {
-      game.name = nameInput.value;
+      state = updateGame(state, game.id, { name: nameInput.value });
       persistAndRender();
     });
 
     notesInput.addEventListener('input', () => {
-      game.notes = notesInput.value;
+      state = updateGame(state, game.id, { notes: notesInput.value });
       persistAndRender();
     });
 
     playModeInput.addEventListener('change', () => {
-      game.playMode = normalizePlayMode(playModeInput.value);
+      state = updateGame(state, game.id, { playMode: playModeInput.value });
       persistAndRender();
     });
 
     removeButton.addEventListener('click', () => {
-      state.games = state.games.filter((existingGame) => existingGame.id !== game.id);
-      removeGameFromPlan(game.id);
+      state = removeGame(state, game.id);
       persistAndRender('Game removed.');
     });
 
@@ -469,31 +466,10 @@ function loadState() {
   const rawState = localStorage.getItem(storageKey);
 
   if (!rawState) {
-    return structuredClone(initialState);
+    return createEmptyState();
   }
 
   return normalizeState(JSON.parse(rawState));
-}
-
-function normalizeState(candidate) {
-  return {
-    teams: Array.isArray(candidate?.teams)
-      ? candidate.teams.map((team) => ({
-          id: String(team.id ?? crypto.randomUUID()),
-          name: String(team.name ?? ''),
-          members: Array.isArray(team.members) ? team.members.map(String) : []
-        }))
-      : [],
-    games: Array.isArray(candidate?.games)
-      ? candidate.games.map((game) => ({
-          id: String(game.id ?? crypto.randomUUID()),
-          name: String(game.name ?? ''),
-          notes: String(game.notes ?? ''),
-          playMode: normalizePlayMode(game.playMode)
-        }))
-      : [],
-    plan: candidate?.plan ?? null
-  };
 }
 
 function getPlanWarning() {
@@ -526,62 +502,6 @@ function getPlanWarning() {
   }
 
   return '';
-}
-
-function removeTeamFromPlan(teamId) {
-  if (!state.plan) {
-    return;
-  }
-
-  state.plan.teamIds = state.plan.teamIds.filter((id) => id !== teamId);
-  state.plan.rounds.forEach((round) => {
-    round.teamIds = round.teamIds.filter((id) => id !== teamId);
-    round.matchups = (round.matchups ?? []).map((matchup) => ({
-      ...matchup,
-      teamIds: matchup.teamIds.filter((id) => id !== teamId)
-    })).filter((matchup) => matchup.teamIds.length > 0);
-  });
-  state.plan.rankPoints = normalizeRankPoints(state.plan.rankPoints, state.plan.teamIds.length);
-
-  Object.keys(state.plan.results).forEach((key) => {
-    if (key.endsWith(`:${teamId}`)) {
-      delete state.plan.results[key];
-    }
-  });
-
-  Object.entries(state.plan.matchResults ?? {}).forEach(([key, result]) => {
-    if (result.winnerTeamId === teamId) {
-      delete state.plan.matchResults[key];
-    }
-  });
-}
-
-function removeGameFromPlan(gameId) {
-  if (!state.plan) {
-    return;
-  }
-
-  state.plan.gameIds = state.plan.gameIds.filter((id) => id !== gameId);
-  state.plan.rounds = state.plan.rounds.filter((round) => round.gameId !== gameId);
-
-  Object.keys(state.plan.results).forEach((key) => {
-    if (key.startsWith(`${gameId}:`)) {
-      delete state.plan.results[key];
-    }
-  });
-
-  Object.keys(state.plan.matchResults ?? {}).forEach((key) => {
-    if (key.startsWith(`${gameId}:`)) {
-      delete state.plan.matchResults[key];
-    }
-  });
-}
-
-function splitLines(value) {
-  return value
-    .split(/[\n,]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
 }
 
 function findById(items, id) {
