@@ -3,6 +3,7 @@ import {
   calculateStandings,
   createMatchups,
   generateGamePlan,
+  getMatchupParticipants,
   getRoundsMissingTeamPairs,
   matchResultKey,
   normalizeRankPoints,
@@ -297,12 +298,21 @@ function renderPlan() {
     const gameResults = calculateGameResults(state.plan, round.gameId);
 
     roundMatchups.forEach((matchup, matchupIndex) => {
+      const participants = getMatchupParticipants(state.teams, matchup);
       const matchupCard = document.createElement('section');
       matchupCard.className = 'matchup-card';
       matchupCard.innerHTML = `
         <div>
           <p class="eyebrow">Match ${matchupIndex + 1}</p>
-          <h4>${matchup.teamIds.map((teamId) => escapeHtml(findById(state.teams, teamId)?.name ?? 'Removed team')).join(' vs ')}</h4>
+          <h4>${participants.map((participant) => escapeHtml(participant.name)).join(' vs ')}</h4>
+          <div class="matchup-participants">
+            ${participants.map((participant) => `
+              <div>
+                <strong>${escapeHtml(participant.name)}</strong>
+                <small>${participant.members.length ? escapeHtml(participant.members.join(', ')) : 'No members listed'}</small>
+              </div>
+            `).join('')}
+          </div>
         </div>
         <div class="team-results"></div>
       `;
@@ -316,7 +326,7 @@ function renderPlan() {
         Winner
         <select aria-label="Winner for match ${matchupIndex + 1}">
           <option value="">Not played</option>
-          ${matchup.teamIds.map((teamId) => `<option value="${escapeHtml(teamId)}">${escapeHtml(findById(state.teams, teamId)?.name ?? 'Removed team')}</option>`).join('')}
+          ${participants.map((participant) => `<option value="${escapeHtml(participant.teamId)}">${escapeHtml(participant.name)}</option>`).join('')}
         </select>
       `;
 

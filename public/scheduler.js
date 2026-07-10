@@ -170,6 +170,18 @@ export function createMatchups(teamIds, roundIndex = 0) {
   }));
 }
 
+export function getMatchupParticipants(teams, matchup) {
+  return matchup.teamIds.map((teamId) => {
+    const team = teams.find((candidate) => candidate.id === teamId);
+
+    return {
+      teamId,
+      name: team?.name ?? 'Removed team',
+      members: Array.isArray(team?.members) ? team.members : []
+    };
+  });
+}
+
 function createPairs(teamIds) {
   const pairs = [];
 

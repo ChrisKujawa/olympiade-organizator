@@ -223,6 +223,7 @@ main {
 
 .game-result,
 .matchups,
+.matchup-participants,
 .team-results,
 .rank-points {
   display: grid;
@@ -250,6 +251,22 @@ main {
 .matchup-card h4,
 .matchup-card p {
   margin: 0;
+}
+
+.matchup-participants {
+  margin-top: 0.55rem;
+}
+
+.matchup-participants div {
+  display: grid;
+  gap: 0.15rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 0.6rem;
+}
+
+.matchup-participants small {
+  color: var(--muted);
 }
 
 .team-score-row,

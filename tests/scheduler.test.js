@@ -5,6 +5,7 @@ import {
   calculateStandings,
   createMatchups,
   generateGamePlan,
+  getMatchupParticipants,
   getRoundsMissingTeamPairs,
   matchResultKey,
   normalizeRankPoints,
@@ -118,6 +119,29 @@ test('createMatchups creates all team pairs for odd team counts', () => {
     { id: 'match-1-8', teamIds: ['team-c', 'team-d'] },
     { id: 'match-1-9', teamIds: ['team-c', 'team-e'] },
     { id: 'match-1-10', teamIds: ['team-d', 'team-e'] }
+  ]);
+});
+
+test('getMatchupParticipants includes team names and player names for match display', () => {
+  const teams = [
+    { id: 'team-a', name: 'Alpha', members: ['Ada', 'Ari'] },
+    { id: 'team-b', name: 'Bravo', members: ['Bea'] }
+  ];
+  const matchup = { id: 'match-1-1', teamIds: ['team-a', 'team-b'] };
+
+  assert.deepEqual(getMatchupParticipants(teams, matchup), [
+    { teamId: 'team-a', name: 'Alpha', members: ['Ada', 'Ari'] },
+    { teamId: 'team-b', name: 'Bravo', members: ['Bea'] }
+  ]);
+});
+
+test('getMatchupParticipants keeps removed teams visible without crashing', () => {
+  const teams = [{ id: 'team-a', name: 'Alpha', members: ['Ada'] }];
+  const matchup = { id: 'match-1-1', teamIds: ['team-a', 'team-removed'] };
+
+  assert.deepEqual(getMatchupParticipants(teams, matchup), [
+    { teamId: 'team-a', name: 'Alpha', members: ['Ada'] },
+    { teamId: 'team-removed', name: 'Removed team', members: [] }
   ]);
 });
 
