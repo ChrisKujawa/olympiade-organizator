@@ -81,12 +81,14 @@ elements.gameForm.addEventListener('submit', (event) => {
 });
 
 elements.generatePlan.addEventListener('click', () => {
-  if (state.plan && !window.confirm('Generate a new plan? Existing scores will be reset.')) {
+  const hasExistingPlan = Boolean(state.plan);
+
+  if (hasExistingPlan && !window.confirm('Replace the existing game plan? Existing results will be reset.')) {
     return;
   }
 
   state.plan = generateGamePlan(state.teams, state.games);
-  persistAndRender('Game plan generated.');
+  persistAndRender(hasExistingPlan ? 'Game plan replaced.' : 'Game plan generated.');
 });
 
 elements.exportData.addEventListener('click', () => {
@@ -155,6 +157,7 @@ function render() {
   renderStandings();
   updateConnectionStatus();
   elements.generatePlan.disabled = state.teams.length === 0 || state.games.length === 0;
+  elements.generatePlan.textContent = state.plan ? 'Regenerate rounds' : 'Generate rounds';
 }
 
 function renderTeams() {
@@ -535,6 +538,16 @@ async function registerServiceWorker() {
     elements.connectionStatus.textContent = 'Offline cache unavailable';
     return;
   }
+
+  let isRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (isRefreshing) {
+      return;
+    }
+
+    isRefreshing = true;
+    window.location.reload();
+  });
 
   try {
     await navigator.serviceWorker.register('./service-worker.js');

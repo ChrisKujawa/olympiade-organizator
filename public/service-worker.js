@@ -1,4 +1,4 @@
-const cacheName = 'olympiade-organizator-v5';
+const cacheName = 'olympiade-organizator-v6';
 const appShell = [
   './',
   './index.html',
@@ -42,16 +42,12 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      return fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         const responseCopy = response.clone();
         caches.open(cacheName).then((cache) => cache.put(event.request, responseCopy));
         return response;
-      });
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });
