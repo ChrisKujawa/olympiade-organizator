@@ -24,7 +24,7 @@ The included GitHub Actions workflow validates the app and deploys the static `p
 - Add olympiade games with short notes.
 - Generate a randomized one-game-at-a-time plan where every team plays every game.
 - See generated matchups so every team plays against every other team in every game.
-- Enter scores directly on every matchup and let the app calculate game rankings.
+- Choose the winner for every matchup and let the app calculate game rankings.
 - Enter ranking results after each game with editable ranking points.
 - See automatic standings.
 - Export/import event data as JSON for backup or moving to another device.

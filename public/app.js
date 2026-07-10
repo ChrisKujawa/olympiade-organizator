@@ -284,7 +284,7 @@ function renderPlan() {
       <div class="matchups"></div>
       <section class="game-result">
         <h4>Game result</h4>
-        <p class="hint">Enter the final ranking after all matchups for this game are done.</p>
+        <p class="hint">Choose a winner for every matchup. The app calculates wins, losses, and ranking points.</p>
         <div class="team-results"></div>
       </section>
     `;
@@ -308,48 +308,49 @@ function renderPlan() {
       `;
 
       const matchResults = matchupCard.querySelector('.team-results');
+      const key = matchResultKey(round.gameId, matchup.id);
+      const winnerTeamId = state.plan.matchResults?.[key]?.winnerTeamId ?? '';
+      const row = document.createElement('label');
+      row.className = 'team-score-row';
+      row.innerHTML = `
+        Winner
+        <select aria-label="Winner for match ${matchupIndex + 1}">
+          <option value="">Not played</option>
+          ${matchup.teamIds.map((teamId) => `<option value="${escapeHtml(teamId)}">${escapeHtml(findById(state.teams, teamId)?.name ?? 'Removed team')}</option>`).join('')}
+        </select>
+      `;
 
-      matchup.teamIds.forEach((teamId) => {
-        const team = findById(state.teams, teamId);
-        const key = matchResultKey(round.gameId, matchup.id, teamId);
-        const row = document.createElement('label');
-        row.className = 'team-score-row';
-        row.innerHTML = `
-          <span>
-            <strong>${escapeHtml(team?.name ?? 'Removed team')}</strong>
-            ${team?.members?.length ? `<small class="team-members">${escapeHtml(team.members.join(', '))}</small>` : ''}
-          </span>
-          <input inputmode="decimal" aria-label="Match score for ${escapeHtml(team?.name ?? 'team')}" placeholder="Score">
-        `;
+      const select = row.querySelector('select');
+      select.value = winnerTeamId;
+      select.addEventListener('change', () => {
+        if (select.value) {
+          state.plan.matchResults[key] = { winnerTeamId: select.value };
+        } else {
+          delete state.plan.matchResults[key];
+        }
 
-        const input = row.querySelector('input');
-        input.value = state.plan.matchResults?.[key]?.score ?? '';
-        input.addEventListener('change', () => {
-          state.plan.matchResults[key] = { score: input.value };
-          persistAndRender();
-        });
-
-        matchResults.append(row);
+        persistAndRender();
       });
 
+      matchResults.append(row);
       matchups.append(matchupCard);
     });
 
-    if (gameResults.some((gameResult) => gameResult.hasScore)) {
+    if (gameResults.some((gameResult) => gameResult.hasResult)) {
       gameResults.forEach((gameResult) => {
         const team = findById(state.teams, gameResult.teamId);
         const row = document.createElement('div');
         row.className = 'team-score-row';
         row.innerHTML = `
           <span><strong>${formatRank(gameResult.rank)} ${escapeHtml(team?.name ?? 'Removed team')}</strong></span>
-          <span>${gameResult.score.toLocaleString()} score / ${gameResult.points.toLocaleString()} pts</span>
+          <span>${gameResult.wins}-${gameResult.losses} / ${gameResult.points.toLocaleString()} pts</span>
         `;
         results.append(row);
       });
     } else {
       const empty = document.createElement('p');
       empty.className = 'hint';
-      empty.textContent = 'Enter matchup scores to calculate this game result.';
+      empty.textContent = 'Choose matchup winners to calculate this game result.';
       results.append(empty);
     }
 
@@ -372,7 +373,7 @@ function createScoringCard() {
       </div>
       <span class="count-pill">Editable</span>
     </div>
-    <p class="hint">Enter scores for every matchup. The app totals each game, ranks teams automatically, and adds these ranking points to the standings.</p>
+    <p class="hint">Choose winners for every matchup. The app totals wins and losses, ranks teams automatically, and adds these ranking points to the standings.</p>
     <div class="rank-points"></div>
   `;
 

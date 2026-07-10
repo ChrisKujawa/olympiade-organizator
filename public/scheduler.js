@@ -45,7 +45,7 @@ export function calculateStandings(teams, plan) {
         const gameResults = calculateGameResults(plan, gameId);
         const gameResult = gameResults.find((result) => result.teamId === team.id);
 
-        if (gameResults.some((result) => result.hasScore)) {
+        if (gameResults.some((result) => result.hasResult)) {
           return sum + (gameResult?.points ?? 0);
         }
 
@@ -71,40 +71,47 @@ export function calculateGameResults(plan, gameId) {
     return [];
   }
 
-  const totals = new Map(round.teamIds.map((teamId) => [teamId, { teamId, score: 0, hasScore: false }]));
+  const totals = new Map(
+    round.teamIds.map((teamId) => [teamId, { teamId, wins: 0, losses: 0, hasResult: false }])
+  );
 
   (round.matchups ?? []).forEach((matchup) => {
+    const result = plan.matchResults?.[matchResultKey(gameId, matchup.id)];
+    const winnerTeamId = result?.winnerTeamId;
+
+    if (!matchup.teamIds.includes(winnerTeamId)) {
+      return;
+    }
+
     matchup.teamIds.forEach((teamId) => {
-      const result = plan.matchResults?.[matchResultKey(gameId, matchup.id, teamId)];
-      const score = Number(result?.score);
-
-      if (!Number.isFinite(score)) {
-        return;
-      }
-
       const total = totals.get(teamId);
-      total.score += score;
-      total.hasScore = true;
+      total.hasResult = true;
+
+      if (teamId === winnerTeamId) {
+        total.wins += 1;
+      } else {
+        total.losses += 1;
+      }
     });
   });
 
   const rankPoints = normalizeRankPoints(plan.rankPoints, round.teamIds.length);
   const rankedResults = [...totals.values()]
-    .sort((left, right) => right.score - left.score || left.teamId.localeCompare(right.teamId));
+    .sort((left, right) => right.wins - left.wins || left.losses - right.losses || left.teamId.localeCompare(right.teamId));
 
-  let previousScore = null;
+  let previousWins = null;
   let currentRank = 0;
 
   return rankedResults.map((result, index) => {
-    if (previousScore !== result.score) {
+    if (previousWins !== result.wins) {
       currentRank = index + 1;
-      previousScore = result.score;
+      previousWins = result.wins;
     }
 
     return {
       ...result,
       rank: currentRank,
-      points: result.hasScore ? rankPoints[currentRank - 1] ?? 0 : 0
+      points: result.hasResult ? rankPoints[currentRank - 1] ?? 0 : 0
     };
   });
 }
@@ -113,8 +120,8 @@ export function resultKey(gameId, teamId) {
   return `${gameId}:${teamId}`;
 }
 
-export function matchResultKey(gameId, matchId, teamId) {
-  return `${gameId}:${matchId}:${teamId}`;
+export function matchResultKey(gameId, matchId) {
+  return `${gameId}:${matchId}`;
 }
 
 export function createDefaultRankPoints(teamCount) {

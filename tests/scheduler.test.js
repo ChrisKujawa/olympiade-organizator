@@ -148,7 +148,7 @@ test('calculateStandings sums ranking points and sorts descending', () => {
   ]);
 });
 
-test('calculateGameResults totals matchup scores and assigns ranking points', () => {
+test('calculateGameResults totals matchup wins and assigns ranking points', () => {
   const teamIds = ['team-a', 'team-b', 'team-c'];
   const matchups = createMatchups(teamIds, 0);
   const plan = {
@@ -156,12 +156,9 @@ test('calculateGameResults totals matchup scores and assigns ranking points', ()
     gameIds: ['game-1'],
     rankPoints: [5, 3, 1],
     matchResults: {
-      [matchResultKey('game-1', matchups[0].id, 'team-a')]: { score: '10' },
-      [matchResultKey('game-1', matchups[0].id, 'team-b')]: { score: '4' },
-      [matchResultKey('game-1', matchups[1].id, 'team-a')]: { score: '1' },
-      [matchResultKey('game-1', matchups[1].id, 'team-c')]: { score: '7' },
-      [matchResultKey('game-1', matchups[2].id, 'team-b')]: { score: '9' },
-      [matchResultKey('game-1', matchups[2].id, 'team-c')]: { score: '2' }
+      [matchResultKey('game-1', matchups[0].id)]: { winnerTeamId: 'team-b' },
+      [matchResultKey('game-1', matchups[1].id)]: { winnerTeamId: 'team-c' },
+      [matchResultKey('game-1', matchups[2].id)]: { winnerTeamId: 'team-b' }
     },
     rounds: [
       {
@@ -174,9 +171,9 @@ test('calculateGameResults totals matchup scores and assigns ranking points', ()
   };
 
   assert.deepEqual(calculateGameResults(plan, 'game-1'), [
-    { teamId: 'team-b', score: 13, hasScore: true, rank: 1, points: 5 },
-    { teamId: 'team-a', score: 11, hasScore: true, rank: 2, points: 3 },
-    { teamId: 'team-c', score: 9, hasScore: true, rank: 3, points: 1 }
+    { teamId: 'team-b', wins: 2, losses: 0, hasResult: true, rank: 1, points: 5 },
+    { teamId: 'team-c', wins: 1, losses: 1, hasResult: true, rank: 2, points: 3 },
+    { teamId: 'team-a', wins: 0, losses: 2, hasResult: true, rank: 3, points: 1 }
   ]);
 });
 
@@ -191,8 +188,7 @@ test('calculateStandings uses matchup-derived game ranking points', () => {
     gameIds: ['game-1'],
     rankPoints: [2, 1],
     matchResults: {
-      [matchResultKey('game-1', matchups[0].id, 'team-a')]: { score: '3' },
-      [matchResultKey('game-1', matchups[0].id, 'team-b')]: { score: '5' }
+      [matchResultKey('game-1', matchups[0].id)]: { winnerTeamId: 'team-b' }
     },
     rounds: [
       {
