@@ -31,6 +31,7 @@ jobs:
         run: npm run check
 
   deploy:
+    if: github.event_name == 'workflow_dispatch'
     needs: test
     runs-on: ubuntu-latest
     environment:
