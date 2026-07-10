@@ -24,7 +24,8 @@ export function generateGamePlan(teams, games, options = {}) {
       id: `round-${roundIndex + 1}`,
       name: `Game ${roundIndex + 1}`,
       gameId: game.id,
-      teamIds: shuffle(activeTeams, rng).map((team) => team.id)
+      teamIds: activeTeams.map((team) => team.id),
+      matchups: createMatchups(activeTeams.map((team) => team.id), roundIndex)
     }))
   };
 }
@@ -78,6 +79,32 @@ export function normalizeRankPoints(rankPoints, teamCount) {
   ];
 }
 
+export function createMatchups(teamIds, roundIndex = 0) {
+  if (teamIds.length <= 1) {
+    return teamIds.length === 0
+      ? []
+      : [{ id: `match-${roundIndex + 1}-1`, teamIds: [...teamIds] }];
+  }
+
+  const orderedTeamIds = rotateForRoundRobin(teamIds, roundIndex);
+  const matchups = [];
+
+  for (let leftIndex = 0; leftIndex < Math.floor(orderedTeamIds.length / 2); leftIndex += 1) {
+    const rightIndex = orderedTeamIds.length - 1 - leftIndex;
+    matchups.push({
+      id: `match-${roundIndex + 1}-${matchups.length + 1}`,
+      teamIds: [orderedTeamIds[leftIndex], orderedTeamIds[rightIndex]]
+    });
+  }
+
+  if (orderedTeamIds.length % 2 === 1) {
+    const remainingTeamId = orderedTeamIds[Math.floor(orderedTeamIds.length / 2)];
+    matchups[matchups.length - 1].teamIds.push(remainingTeamId);
+  }
+
+  return matchups;
+}
+
 function shuffle(items, rng) {
   const shuffled = [...items];
 
@@ -87,6 +114,21 @@ function shuffle(items, rng) {
   }
 
   return shuffled;
+}
+
+function rotateForRoundRobin(teamIds, roundIndex) {
+  if (teamIds.length <= 2) {
+    return [...teamIds];
+  }
+
+  const [anchor, ...rotatingTeamIds] = teamIds;
+  const shift = roundIndex % rotatingTeamIds.length;
+  const rotatedTeamIds = [
+    ...rotatingTeamIds.slice(rotatingTeamIds.length - shift),
+    ...rotatingTeamIds.slice(0, rotatingTeamIds.length - shift)
+  ];
+
+  return [anchor, ...rotatedTeamIds];
 }
 
 function createId() {

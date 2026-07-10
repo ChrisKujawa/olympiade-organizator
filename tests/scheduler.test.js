@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateStandings,
+  createMatchups,
   generateGamePlan,
   normalizeRankPoints,
   resultKey
@@ -30,7 +31,31 @@ test('generateGamePlan creates one round per game with every team in every round
   for (const round of plan.rounds) {
     assert.ok(games.some((game) => game.id === round.gameId));
     assert.deepEqual(new Set(round.teamIds), new Set(teams.map((team) => team.id)));
+    assert.deepEqual(new Set(round.matchups.flatMap((matchup) => matchup.teamIds)), new Set(round.teamIds));
+    assert.equal(round.matchups.length, 2);
   }
+});
+
+test('createMatchups varies opponents across rounds', () => {
+  const teamIds = ['team-a', 'team-b', 'team-c', 'team-d'];
+
+  assert.deepEqual(createMatchups(teamIds, 0), [
+    { id: 'match-1-1', teamIds: ['team-a', 'team-d'] },
+    { id: 'match-1-2', teamIds: ['team-b', 'team-c'] }
+  ]);
+  assert.deepEqual(createMatchups(teamIds, 1), [
+    { id: 'match-2-1', teamIds: ['team-a', 'team-c'] },
+    { id: 'match-2-2', teamIds: ['team-d', 'team-b'] }
+  ]);
+});
+
+test('createMatchups keeps odd team counts playing with one three-team matchup', () => {
+  const matchups = createMatchups(['team-a', 'team-b', 'team-c', 'team-d', 'team-e'], 0);
+
+  assert.deepEqual(matchups, [
+    { id: 'match-1-1', teamIds: ['team-a', 'team-e'] },
+    { id: 'match-1-2', teamIds: ['team-b', 'team-d', 'team-c'] }
+  ]);
 });
 
 test('calculateStandings sums ranking points and sorts descending', () => {

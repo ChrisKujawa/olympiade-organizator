@@ -1,5 +1,6 @@
 import {
   calculateStandings,
+  createMatchups,
   generateGamePlan,
   normalizeRankPoints,
   resultKey
@@ -259,7 +260,7 @@ function renderPlan() {
   const scoringCard = createScoringCard();
   elements.roundsList.append(scoringCard);
 
-  state.plan.rounds.forEach((round) => {
+  state.plan.rounds.forEach((round, roundIndex) => {
     const game = findById(state.games, round.gameId);
     const roundCard = document.createElement('article');
     roundCard.className = 'round-card';
@@ -272,35 +273,54 @@ function renderPlan() {
         </div>
         <span class="count-pill">${round.teamIds.length} ${pluralize('team', round.teamIds.length)}</span>
       </div>
-      <div class="team-results"></div>
+      <div class="matchups"></div>
     `;
 
-    const results = roundCard.querySelector('.team-results');
+    const matchups = roundCard.querySelector('.matchups');
+    const roundMatchups = round.matchups?.length
+      ? round.matchups
+      : createMatchups(round.teamIds, roundIndex);
 
-    round.teamIds.forEach((teamId) => {
-      const team = findById(state.teams, teamId);
-      const key = resultKey(round.gameId, teamId);
-      const row = document.createElement('label');
-      row.className = 'team-score-row';
-      row.innerHTML = `
-        <span>
-          <strong>${escapeHtml(team?.name ?? 'Removed team')}</strong>
-          ${team?.members?.length ? `<small class="team-members">${escapeHtml(team.members.join(', '))}</small>` : ''}
-        </span>
-        <select aria-label="Rank for ${escapeHtml(team?.name ?? 'team')}">
-          <option value="">Rank</option>
-          ${state.plan.teamIds.map((_, index) => `<option value="${index + 1}">${formatRank(index + 1)}</option>`).join('')}
-        </select>
+    roundMatchups.forEach((matchup, matchupIndex) => {
+      const matchupCard = document.createElement('section');
+      matchupCard.className = 'matchup-card';
+      matchupCard.innerHTML = `
+        <div>
+          <p class="eyebrow">Match ${matchupIndex + 1}</p>
+          <h4>${matchup.teamIds.map((teamId) => escapeHtml(findById(state.teams, teamId)?.name ?? 'Removed team')).join(' vs ')}</h4>
+        </div>
+        <div class="team-results"></div>
       `;
 
-      const select = row.querySelector('select');
-      select.value = state.plan.results?.[key]?.rank ?? '';
-      select.addEventListener('change', () => {
-        state.plan.results[key] = { rank: select.value };
-        persistAndRender();
+      const results = matchupCard.querySelector('.team-results');
+
+      matchup.teamIds.forEach((teamId) => {
+        const team = findById(state.teams, teamId);
+        const key = resultKey(round.gameId, teamId);
+        const row = document.createElement('label');
+        row.className = 'team-score-row';
+        row.innerHTML = `
+          <span>
+            <strong>${escapeHtml(team?.name ?? 'Removed team')}</strong>
+            ${team?.members?.length ? `<small class="team-members">${escapeHtml(team.members.join(', '))}</small>` : ''}
+          </span>
+          <select aria-label="Rank for ${escapeHtml(team?.name ?? 'team')}">
+            <option value="">Rank</option>
+            ${state.plan.teamIds.map((_, index) => `<option value="${index + 1}">${formatRank(index + 1)}</option>`).join('')}
+          </select>
+        `;
+
+        const select = row.querySelector('select');
+        select.value = state.plan.results?.[key]?.rank ?? '';
+        select.addEventListener('change', () => {
+          state.plan.results[key] = { rank: select.value };
+          persistAndRender();
+        });
+
+        results.append(row);
       });
 
-      results.append(row);
+      matchups.append(matchupCard);
     });
 
     elements.roundsList.append(roundCard);
@@ -432,6 +452,10 @@ function removeTeamFromPlan(teamId) {
   state.plan.teamIds = state.plan.teamIds.filter((id) => id !== teamId);
   state.plan.rounds.forEach((round) => {
     round.teamIds = round.teamIds.filter((id) => id !== teamId);
+    round.matchups = (round.matchups ?? []).map((matchup) => ({
+      ...matchup,
+      teamIds: matchup.teamIds.filter((id) => id !== teamId)
+    })).filter((matchup) => matchup.teamIds.length > 0);
   });
   state.plan.rankPoints = normalizeRankPoints(state.plan.rankPoints, state.plan.teamIds.length);
 

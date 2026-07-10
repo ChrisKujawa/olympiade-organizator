@@ -221,6 +221,7 @@ main {
   gap: 0.75rem;
 }
 
+.matchups,
 .team-results,
 .rank-points {
   display: grid;
@@ -231,7 +232,8 @@ main {
   grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
 }
 
-.station-card {
+.station-card,
+.matchup-card {
   display: grid;
   gap: 0.65rem;
   border-radius: 1rem;
@@ -240,7 +242,9 @@ main {
 }
 
 .station-card h4,
-.station-card p {
+.station-card p,
+.matchup-card h4,
+.matchup-card p {
   margin: 0;
 }
 
