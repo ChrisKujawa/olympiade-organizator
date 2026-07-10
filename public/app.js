@@ -2,6 +2,8 @@ import {
   calculateStandings,
   createMatchups,
   generateGamePlan,
+  getMissingTeamPairs,
+  getRequiredGameCountForFullMatchups,
   normalizeRankPoints,
   resultKey
 } from './scheduler.js';
@@ -439,6 +441,18 @@ function getPlanWarning() {
 
   if (state.games.some((game) => !plannedGameIds.has(game.id))) {
     return 'Some games were added after this plan was generated. Regenerate rounds to include them.';
+  }
+
+  const missingPairs = getMissingTeamPairs(state.plan.teamIds, state.plan.rounds);
+
+  if (missingPairs.length > 0) {
+    const requiredGames = getRequiredGameCountForFullMatchups(state.plan.teamIds.length);
+    const examples = missingPairs
+      .slice(0, 3)
+      .map((pair) => pair.map((teamId) => findById(state.teams, teamId)?.name ?? 'Removed team').join(' vs '))
+      .join(', ');
+
+    return `Not every team plays every other team yet. Add at least ${requiredGames} games for ${state.plan.teamIds.length} teams, then regenerate. Missing: ${examples}${missingPairs.length > 3 ? ', ...' : ''}`;
   }
 
   return '';

@@ -79,6 +79,30 @@ export function normalizeRankPoints(rankPoints, teamCount) {
   ];
 }
 
+export function getMissingTeamPairs(teamIds, rounds) {
+  const playedPairs = new Set();
+
+  rounds.forEach((round) => {
+    (round.matchups ?? []).forEach((matchup) => {
+      createPairs(matchup.teamIds).forEach((pair) => playedPairs.add(pairKey(pair)));
+    });
+  });
+
+  return createPairs(teamIds).filter((pair) => !playedPairs.has(pairKey(pair)));
+}
+
+export function getRequiredGameCountForFullMatchups(teamCount) {
+  if (teamCount <= 1) {
+    return 0;
+  }
+
+  if (teamCount <= 3) {
+    return 1;
+  }
+
+  return teamCount - 1;
+}
+
 export function createMatchups(teamIds, roundIndex = 0) {
   if (teamIds.length <= 1) {
     return teamIds.length === 0
@@ -103,6 +127,22 @@ export function createMatchups(teamIds, roundIndex = 0) {
   }
 
   return matchups;
+}
+
+function createPairs(teamIds) {
+  const pairs = [];
+
+  for (let leftIndex = 0; leftIndex < teamIds.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < teamIds.length; rightIndex += 1) {
+      pairs.push([teamIds[leftIndex], teamIds[rightIndex]]);
+    }
+  }
+
+  return pairs;
+}
+
+function pairKey(pair) {
+  return [...pair].sort().join(':');
 }
 
 function shuffle(items, rng) {

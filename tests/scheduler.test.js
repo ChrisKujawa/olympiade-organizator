@@ -4,6 +4,8 @@ import {
   calculateStandings,
   createMatchups,
   generateGamePlan,
+  getMissingTeamPairs,
+  getRequiredGameCountForFullMatchups,
   normalizeRankPoints,
   resultKey
 } from '../public/scheduler.js';
@@ -34,6 +36,44 @@ test('generateGamePlan creates one round per game with every team in every round
     assert.deepEqual(new Set(round.matchups.flatMap((matchup) => matchup.teamIds)), new Set(round.teamIds));
     assert.equal(round.matchups.length, 2);
   }
+});
+
+test('generateGamePlan covers every team-vs-team pair when enough games exist', () => {
+  const teams = [
+    { id: 'team-a', name: 'A' },
+    { id: 'team-b', name: 'B' },
+    { id: 'team-c', name: 'C' },
+    { id: 'team-d', name: 'D' },
+    { id: 'team-e', name: 'E' }
+  ];
+  const games = [
+    { id: 'game-1', name: 'One' },
+    { id: 'game-2', name: 'Two' },
+    { id: 'game-3', name: 'Three' },
+    { id: 'game-4', name: 'Four' }
+  ];
+
+  const plan = generateGamePlan(teams, games, { rng: () => 0.99 });
+
+  assert.deepEqual(getMissingTeamPairs(plan.teamIds, plan.rounds), []);
+});
+
+test('getMissingTeamPairs reports uncovered pairs when there are not enough games', () => {
+  const teamIds = ['team-a', 'team-b', 'team-c', 'team-d'];
+  const rounds = [
+    { matchups: createMatchups(teamIds, 0) },
+    { matchups: createMatchups(teamIds, 1) }
+  ];
+
+  assert.deepEqual(getMissingTeamPairs(teamIds, rounds), [['team-a', 'team-b'], ['team-c', 'team-d']]);
+});
+
+test('getRequiredGameCountForFullMatchups describes minimum useful game counts', () => {
+  assert.equal(getRequiredGameCountForFullMatchups(1), 0);
+  assert.equal(getRequiredGameCountForFullMatchups(2), 1);
+  assert.equal(getRequiredGameCountForFullMatchups(3), 1);
+  assert.equal(getRequiredGameCountForFullMatchups(4), 3);
+  assert.equal(getRequiredGameCountForFullMatchups(5), 4);
 });
 
 test('createMatchups varies opponents across rounds', () => {
