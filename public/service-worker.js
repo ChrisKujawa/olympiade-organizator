@@ -1,4 +1,4 @@
-const cacheName = 'olympiade-organizator-v10';
+const cacheName = 'olympiade-organizator-v11';
 const appShell = [
   './',
   './index.html',

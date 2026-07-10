@@ -7,6 +7,8 @@ import {
   getRoundsMissingTeamPairs,
   matchResultKey,
   normalizeRankPoints,
+  normalizePlayMode,
+  PLAY_MODES,
 } from './scheduler.js';
 
 const storageKey = 'olympiade-organizator:v1';
@@ -29,6 +31,7 @@ const elements = {
   gameForm: document.querySelector('#game-form'),
   gameName: document.querySelector('#game-name'),
   gameNotes: document.querySelector('#game-notes'),
+  gamePlayMode: document.querySelector('#game-play-mode'),
   gamesList: document.querySelector('#games-list'),
   gameCount: document.querySelector('#game-count'),
   generatePlan: document.querySelector('#generate-plan'),
@@ -75,7 +78,8 @@ elements.gameForm.addEventListener('submit', (event) => {
   state.games.push({
     id: crypto.randomUUID(),
     name,
-    notes: elements.gameNotes.value.trim()
+    notes: elements.gameNotes.value.trim(),
+    playMode: normalizePlayMode(elements.gamePlayMode.value)
   });
 
   elements.gameForm.reset();
@@ -218,10 +222,12 @@ function renderGames() {
   state.games.forEach((game) => {
     const card = elements.gameTemplate.content.firstElementChild.cloneNode(true);
     const nameInput = card.querySelector('[data-field="name"]');
+    const playModeInput = card.querySelector('[data-field="playMode"]');
     const notesInput = card.querySelector('[data-field="notes"]');
     const removeButton = card.querySelector('[data-action="remove-game"]');
 
     nameInput.value = game.name;
+    playModeInput.value = normalizePlayMode(game.playMode);
     notesInput.value = game.notes;
 
     nameInput.addEventListener('input', () => {
@@ -231,6 +237,11 @@ function renderGames() {
 
     notesInput.addEventListener('input', () => {
       game.notes = notesInput.value;
+      persistAndRender();
+    });
+
+    playModeInput.addEventListener('change', () => {
+      game.playMode = normalizePlayMode(playModeInput.value);
       persistAndRender();
     });
 
@@ -271,6 +282,7 @@ function renderPlan() {
 
   state.plan.rounds.forEach((round, roundIndex) => {
     const game = findById(state.games, round.gameId);
+    const playMode = normalizePlayMode(round.playMode);
     const roundCard = document.createElement('article');
     roundCard.className = 'round-card';
     roundCard.innerHTML = `
@@ -280,12 +292,12 @@ function renderPlan() {
           <h3>${escapeHtml(game?.name ?? 'Removed game')}</h3>
           ${game?.notes ? `<p class="hint">${escapeHtml(game.notes)}</p>` : ''}
         </div>
-        <span class="count-pill">${round.teamIds.length} ${pluralize('team', round.teamIds.length)}</span>
+        <span class="count-pill">${formatPlayMode(playMode)}</span>
       </div>
       <div class="matchups"></div>
       <section class="game-result">
         <h4>Game result</h4>
-        <p class="hint">Choose a winner for every matchup. The app calculates wins, losses, and ranking points.</p>
+        <p class="hint">${playMode === PLAY_MODES.KNOCKOUT ? 'Choose winners as the bracket unlocks. The app calculates the knockout ranking points.' : 'Choose a winner for every matchup. The app calculates wins, losses, and ranking points.'}</p>
         <div class="team-results"></div>
       </section>
     `;
@@ -297,22 +309,25 @@ function renderPlan() {
       : createMatchups(round.teamIds, roundIndex);
     const gameResults = calculateGameResults(state.plan, round.gameId);
 
+    let currentBracketRound = null;
+
     roundMatchups.forEach((matchup, matchupIndex) => {
-      const participants = getMatchupParticipants(state.teams, matchup);
+      const participants = getMatchupParticipants(state.teams, matchup, round, state.plan.matchResults, round.gameId);
+
+      if (playMode === PLAY_MODES.KNOCKOUT && currentBracketRound !== matchup.bracketRound) {
+        currentBracketRound = matchup.bracketRound;
+        const heading = document.createElement('h4');
+        heading.textContent = formatBracketRound(matchup.bracketRound, roundMatchups);
+        matchups.append(heading);
+      }
+
       const matchupCard = document.createElement('section');
       matchupCard.className = 'matchup-card';
       matchupCard.innerHTML = `
         <div>
           <p class="eyebrow">Match ${matchupIndex + 1}</p>
-          <h4>${participants.map((participant) => escapeHtml(participant.name)).join(' vs ')}</h4>
-          <div class="matchup-participants">
-            ${participants.map((participant) => `
-              <div>
-                <strong>${escapeHtml(participant.name)}</strong>
-                <small>${participant.members.length ? escapeHtml(participant.members.join(', ')) : 'No members listed'}</small>
-              </div>
-            `).join('')}
-          </div>
+          <h4>${formatMatchupTitle(participants, matchup)}</h4>
+          ${participants.length ? createParticipantMarkup(participants) : ''}
         </div>
         <div class="team-results"></div>
       `;
@@ -320,29 +335,38 @@ function renderPlan() {
       const matchResults = matchupCard.querySelector('.team-results');
       const key = matchResultKey(round.gameId, matchup.id);
       const winnerTeamId = state.plan.matchResults?.[key]?.winnerTeamId ?? '';
-      const row = document.createElement('label');
-      row.className = 'team-score-row';
-      row.innerHTML = `
-        Winner
-        <select aria-label="Winner for match ${matchupIndex + 1}">
-          <option value="">Not played</option>
-          ${participants.map((participant) => `<option value="${escapeHtml(participant.teamId)}">${escapeHtml(participant.name)}</option>`).join('')}
-        </select>
-      `;
 
-      const select = row.querySelector('select');
-      select.value = winnerTeamId;
-      select.addEventListener('change', () => {
-        if (select.value) {
-          state.plan.matchResults[key] = { winnerTeamId: select.value };
-        } else {
-          delete state.plan.matchResults[key];
-        }
+      if (participants.length > 1) {
+        const row = document.createElement('label');
+        row.className = 'team-score-row';
+        row.innerHTML = `
+          Winner
+          <select aria-label="Winner for match ${matchupIndex + 1}">
+            <option value="">Not played</option>
+            ${participants.map((participant) => `<option value="${escapeHtml(participant.teamId)}">${escapeHtml(participant.name)}</option>`).join('')}
+          </select>
+        `;
 
-        persistAndRender();
-      });
+        const select = row.querySelector('select');
+        select.value = winnerTeamId;
+        select.addEventListener('change', () => {
+          if (select.value) {
+            state.plan.matchResults[key] = { winnerTeamId: select.value };
+          } else {
+            delete state.plan.matchResults[key];
+          }
 
-      matchResults.append(row);
+          persistAndRender();
+        });
+
+        matchResults.append(row);
+      } else {
+        const note = document.createElement('p');
+        note.className = 'hint';
+        note.textContent = participants.length === 1 ? 'Bye - advances automatically.' : 'Waiting for previous winner.';
+        matchResults.append(note);
+      }
+
       matchups.append(matchupCard);
     });
 
@@ -464,7 +488,8 @@ function normalizeState(candidate) {
       ? candidate.games.map((game) => ({
           id: String(game.id ?? crypto.randomUUID()),
           name: String(game.name ?? ''),
-          notes: String(game.notes ?? '')
+          notes: String(game.notes ?? ''),
+          playMode: normalizePlayMode(game.playMode)
         }))
       : [],
     plan: candidate?.plan ?? null
@@ -481,6 +506,10 @@ function getPlanWarning() {
 
   if (state.games.some((game) => !plannedGameIds.has(game.id))) {
     return 'Some games were added after this plan was generated. Regenerate rounds to include them.';
+  }
+
+  if (state.games.some((game) => plannedGameIds.has(game.id) && normalizePlayMode(game.playMode) !== normalizePlayMode(state.plan.rounds.find((round) => round.gameId === game.id)?.playMode))) {
+    return 'A game play mode changed after this plan was generated. Regenerate rounds to apply it.';
   }
 
   const roundsMissingPairs = getRoundsMissingTeamPairs(state.plan.teamIds, state.plan.rounds);
@@ -519,6 +548,12 @@ function removeTeamFromPlan(teamId) {
       delete state.plan.results[key];
     }
   });
+
+  Object.entries(state.plan.matchResults ?? {}).forEach(([key, result]) => {
+    if (result.winnerTeamId === teamId) {
+      delete state.plan.matchResults[key];
+    }
+  });
 }
 
 function removeGameFromPlan(gameId) {
@@ -532,6 +567,12 @@ function removeGameFromPlan(gameId) {
   Object.keys(state.plan.results).forEach((key) => {
     if (key.startsWith(`${gameId}:`)) {
       delete state.plan.results[key];
+    }
+  });
+
+  Object.keys(state.plan.matchResults ?? {}).forEach((key) => {
+    if (key.startsWith(`${gameId}:`)) {
+      delete state.plan.matchResults[key];
     }
   });
 }
@@ -561,6 +602,49 @@ function formatRank(rank) {
         : 'th';
 
   return `${rank}${suffix}`;
+}
+
+function formatPlayMode(playMode) {
+  return playMode === PLAY_MODES.KNOCKOUT ? 'Knockout' : 'Everyone vs everyone';
+}
+
+function formatBracketRound(bracketRound, matchups) {
+  const highestRound = Math.max(...matchups.map((matchup) => matchup.bracketRound ?? 1));
+
+  if (bracketRound === highestRound) {
+    return 'Final';
+  }
+
+  if (bracketRound === highestRound - 1) {
+    return 'Semi-final';
+  }
+
+  return `Knockout round ${bracketRound}`;
+}
+
+function formatMatchupTitle(participants, matchup) {
+  if (participants.length === 0) {
+    return 'Waiting for previous winners';
+  }
+
+  if (participants.length === 1) {
+    return `${escapeHtml(participants[0].name)} has a bye`;
+  }
+
+  return participants.map((participant) => escapeHtml(participant.name)).join(' vs ');
+}
+
+function createParticipantMarkup(participants) {
+  return `
+    <div class="matchup-participants">
+      ${participants.map((participant) => `
+        <div>
+          <strong>${escapeHtml(participant.name)}</strong>
+          <small>${participant.members.length ? escapeHtml(participant.members.join(', ')) : 'No members listed'}</small>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function updateConnectionStatus() {

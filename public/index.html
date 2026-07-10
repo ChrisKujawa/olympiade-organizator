@@ -66,6 +66,13 @@
             Notes
             <textarea id="game-notes" name="gameNotes" placeholder="Rules, location, materials, score hint..."></textarea>
           </label>
+          <label>
+            Play mode
+            <select id="game-play-mode" name="gamePlayMode">
+              <option value="round-robin">Everyone vs everyone</option>
+              <option value="knockout">Knockout</option>
+            </select>
+          </label>
           <button type="submit">Add game</button>
         </form>
 
@@ -131,6 +138,13 @@
           <input class="card-title-input" data-field="name" aria-label="Game name">
           <button class="icon-button" data-action="remove-game" type="button" aria-label="Remove game">Remove</button>
         </div>
+        <label>
+          Play mode
+          <select data-field="playMode" aria-label="Game play mode">
+            <option value="round-robin">Everyone vs everyone</option>
+            <option value="knockout">Knockout</option>
+          </select>
+        </label>
         <label>
           Notes
           <textarea data-field="notes" aria-label="Game notes"></textarea>

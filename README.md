@@ -21,9 +21,10 @@ The included GitHub Actions workflow validates the app and deploys the static `p
 ## Features
 
 - Add teams with member lists.
-- Add olympiade games with short notes.
+- Add olympiade games with short notes and a play mode.
 - Generate a randomized one-game-at-a-time plan where every team plays every game.
-- See generated matchups so every team plays against every other team in every game.
+- Choose per-game play modes: everyone-vs-everyone or knockout.
+- See generated matchups, including knockout bracket rounds and byes.
 - Show the players for both teams directly in every matchup.
 - Choose the winner for every matchup and let the app calculate game rankings.
 - Enter ranking results after each game with editable ranking points.

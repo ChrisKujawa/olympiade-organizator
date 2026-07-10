@@ -1,3 +1,8 @@
+export const PLAY_MODES = {
+  ROUND_ROBIN: 'round-robin',
+  KNOCKOUT: 'knockout'
+};
+
 export function generateGamePlan(teams, games, options = {}) {
   const rng = options.rng ?? Math.random;
   const activeTeams = shuffle(
@@ -25,8 +30,9 @@ export function generateGamePlan(teams, games, options = {}) {
       id: `round-${roundIndex + 1}`,
       name: `Game ${roundIndex + 1}`,
       gameId: game.id,
+      playMode: normalizePlayMode(game.playMode),
       teamIds: activeTeams.map((team) => team.id),
-      matchups: createMatchups(activeTeams.map((team) => team.id), roundIndex)
+      matchups: createGameMatchups(activeTeams.map((team) => team.id), normalizePlayMode(game.playMode), roundIndex)
     }))
   };
 }
@@ -69,6 +75,10 @@ export function calculateGameResults(plan, gameId) {
 
   if (!round) {
     return [];
+  }
+
+  if (normalizePlayMode(round.playMode) === PLAY_MODES.KNOCKOUT) {
+    return calculateKnockoutGameResults(plan, round);
   }
 
   const totals = new Map(
@@ -145,12 +155,24 @@ export function normalizeRankPoints(rankPoints, teamCount) {
   ];
 }
 
+export function normalizePlayMode(playMode) {
+  return Object.values(PLAY_MODES).includes(playMode) ? playMode : PLAY_MODES.ROUND_ROBIN;
+}
+
 export function getRoundsMissingTeamPairs(teamIds, rounds) {
   const allPairs = createPairs(teamIds);
 
   return rounds
     .map((round) => {
       const playedPairs = new Set();
+
+      if (normalizePlayMode(round.playMode) !== PLAY_MODES.ROUND_ROBIN) {
+        return {
+          roundId: round.id,
+          gameId: round.gameId,
+          missingPairs: []
+        };
+      }
 
       (round.matchups ?? []).forEach((matchup) => {
         createPairs(matchup.teamIds).forEach((pair) => playedPairs.add(pairKey(pair)));
@@ -165,15 +187,85 @@ export function getRoundsMissingTeamPairs(teamIds, rounds) {
     .filter((round) => round.missingPairs.length > 0);
 }
 
+export function createGameMatchups(teamIds, playMode, roundIndex = 0) {
+  return normalizePlayMode(playMode) === PLAY_MODES.KNOCKOUT
+    ? createKnockoutMatchups(teamIds, roundIndex)
+    : createMatchups(teamIds, roundIndex);
+}
+
 export function createMatchups(teamIds, roundIndex = 0) {
   return createPairs(teamIds).map((teamPair, pairIndex) => ({
     id: `match-${roundIndex + 1}-${pairIndex + 1}`,
+    bracketRound: 1,
     teamIds: teamPair
   }));
 }
 
-export function getMatchupParticipants(teams, matchup) {
-  return matchup.teamIds.map((teamId) => {
+export function createKnockoutMatchups(teamIds, roundIndex = 0) {
+  if (teamIds.length === 0) {
+    return [];
+  }
+
+  if (teamIds.length === 1) {
+    return [{
+      id: `match-${roundIndex + 1}-1`,
+      bracketRound: 1,
+      teamIds: [teamIds[0]]
+    }];
+  }
+
+  const bracketSize = nextPowerOfTwo(teamIds.length);
+  const seeds = [
+    ...teamIds,
+    ...Array.from({ length: bracketSize - teamIds.length }, () => null)
+  ];
+  const matchups = [];
+  let currentMatchIds = [];
+
+  for (let seedIndex = 0; seedIndex < bracketSize / 2; seedIndex += 1) {
+    const teamPair = [seeds[seedIndex], seeds[bracketSize - seedIndex - 1]].filter(Boolean);
+    const matchup = {
+      id: `match-${roundIndex + 1}-${matchups.length + 1}`,
+      bracketRound: 1,
+      teamIds: teamPair
+    };
+
+    matchups.push(matchup);
+    currentMatchIds.push(matchup.id);
+  }
+
+  let bracketRound = 2;
+
+  while (currentMatchIds.length > 1) {
+    const nextMatchIds = [];
+
+    for (let matchIndex = 0; matchIndex < currentMatchIds.length; matchIndex += 2) {
+      const matchup = {
+        id: `match-${roundIndex + 1}-${matchups.length + 1}`,
+        bracketRound,
+        teamIds: [],
+        sourceMatchIds: currentMatchIds.slice(matchIndex, matchIndex + 2)
+      };
+
+      matchups.push(matchup);
+      nextMatchIds.push(matchup.id);
+    }
+
+    currentMatchIds = nextMatchIds;
+    bracketRound += 1;
+  }
+
+  return matchups;
+}
+
+export function getMatchupParticipants(teams, matchup, round = null, matchResults = {}, gameId = '') {
+  const teamIds = matchup.sourceMatchIds?.length
+    ? matchup.sourceMatchIds
+      .map((sourceMatchId) => getMatchupWinnerTeamId(round, sourceMatchId, matchResults, gameId))
+      .filter(Boolean)
+    : matchup.teamIds;
+
+  return teamIds.map((teamId) => {
     const team = teams.find((candidate) => candidate.id === teamId);
 
     return {
@@ -182,6 +274,90 @@ export function getMatchupParticipants(teams, matchup) {
       members: Array.isArray(team?.members) ? team.members : []
     };
   });
+}
+
+function calculateKnockoutGameResults(plan, round) {
+  const totals = new Map(
+    round.teamIds.map((teamId) => [teamId, {
+      teamId,
+      wins: 0,
+      losses: 0,
+      hasResult: false,
+      eliminatedRound: null
+    }])
+  );
+
+  const sortedMatchups = [...(round.matchups ?? [])].sort((left, right) => left.bracketRound - right.bracketRound);
+
+  sortedMatchups.forEach((matchup) => {
+    const participants = getMatchupParticipants([], matchup, round, plan.matchResults, round.gameId)
+      .map((participant) => participant.teamId);
+    const winnerTeamId = getMatchupWinnerTeamId(round, matchup.id, plan.matchResults, round.gameId);
+
+    if (participants.length < 2 || !participants.includes(winnerTeamId)) {
+      return;
+    }
+
+    participants.forEach((teamId) => {
+      const total = totals.get(teamId);
+      total.hasResult = true;
+
+      if (teamId === winnerTeamId) {
+        total.wins += 1;
+      } else {
+        total.losses += 1;
+        total.eliminatedRound = matchup.bracketRound;
+      }
+    });
+  });
+
+  const rankPoints = normalizeRankPoints(plan.rankPoints, round.teamIds.length);
+  const rankedResults = [...totals.values()]
+    .sort((left, right) => {
+      const leftProgress = left.eliminatedRound ?? Number.POSITIVE_INFINITY;
+      const rightProgress = right.eliminatedRound ?? Number.POSITIVE_INFINITY;
+
+      return rightProgress - leftProgress
+        || right.wins - left.wins
+        || left.losses - right.losses
+        || left.teamId.localeCompare(right.teamId);
+    });
+
+  let previousRecord = null;
+  let currentRank = 0;
+
+  return rankedResults.map((result, index) => {
+    const record = `${result.eliminatedRound ?? 'alive'}:${result.wins}:${result.losses}`;
+
+    if (previousRecord !== record) {
+      currentRank = index + 1;
+      previousRecord = record;
+    }
+
+    return {
+      teamId: result.teamId,
+      wins: result.wins,
+      losses: result.losses,
+      hasResult: result.hasResult,
+      rank: currentRank,
+      points: result.hasResult ? rankPoints[currentRank - 1] ?? 0 : 0
+    };
+  });
+}
+
+function getMatchupWinnerTeamId(round, matchId, matchResults, gameId) {
+  const matchup = round?.matchups?.find((candidate) => candidate.id === matchId);
+
+  if (!matchup) {
+    return null;
+  }
+
+  if (!matchup.sourceMatchIds?.length && matchup.teamIds.length === 1) {
+    return matchup.teamIds[0];
+  }
+
+  const result = matchResults?.[matchResultKey(gameId, matchId)];
+  return result?.winnerTeamId ?? null;
 }
 
 function createPairs(teamIds) {
@@ -194,6 +370,16 @@ function createPairs(teamIds) {
   }
 
   return pairs;
+}
+
+function nextPowerOfTwo(value) {
+  let power = 1;
+
+  while (power < value) {
+    power *= 2;
+  }
+
+  return power;
 }
 
 function pairKey(pair) {
