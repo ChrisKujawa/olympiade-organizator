@@ -4,8 +4,7 @@ import {
   calculateStandings,
   createMatchups,
   generateGamePlan,
-  getMissingTeamPairs,
-  getRequiredGameCountForFullMatchups,
+  getRoundsMissingTeamPairs,
   normalizeRankPoints,
   resultKey
 } from '../public/scheduler.js';
@@ -34,11 +33,11 @@ test('generateGamePlan creates one round per game with every team in every round
     assert.ok(games.some((game) => game.id === round.gameId));
     assert.deepEqual(new Set(round.teamIds), new Set(teams.map((team) => team.id)));
     assert.deepEqual(new Set(round.matchups.flatMap((matchup) => matchup.teamIds)), new Set(round.teamIds));
-    assert.equal(round.matchups.length, 2);
+    assert.equal(round.matchups.length, 6);
   }
 });
 
-test('generateGamePlan covers every team-vs-team pair when enough games exist', () => {
+test('generateGamePlan covers every team-vs-team pair in every game', () => {
   const teams = [
     { id: 'team-a', name: 'A' },
     { id: 'team-b', name: 'B' },
@@ -55,46 +54,68 @@ test('generateGamePlan covers every team-vs-team pair when enough games exist', 
 
   const plan = generateGamePlan(teams, games, { rng: () => 0.99 });
 
-  assert.deepEqual(getMissingTeamPairs(plan.teamIds, plan.rounds), []);
+  assert.deepEqual(getRoundsMissingTeamPairs(plan.teamIds, plan.rounds), []);
 });
 
-test('getMissingTeamPairs reports uncovered pairs when there are not enough games', () => {
+test('getRoundsMissingTeamPairs reports games with uncovered team pairs', () => {
   const teamIds = ['team-a', 'team-b', 'team-c', 'team-d'];
   const rounds = [
-    { matchups: createMatchups(teamIds, 0) },
-    { matchups: createMatchups(teamIds, 1) }
+    {
+      id: 'round-1',
+      gameId: 'game-1',
+      matchups: [
+        { id: 'match-1', teamIds: ['team-a', 'team-b'] },
+        { id: 'match-2', teamIds: ['team-c', 'team-d'] }
+      ]
+    },
+    {
+      id: 'round-2',
+      gameId: 'game-2',
+      matchups: createMatchups(teamIds, 1)
+    }
   ];
 
-  assert.deepEqual(getMissingTeamPairs(teamIds, rounds), [['team-a', 'team-b'], ['team-c', 'team-d']]);
+  assert.deepEqual(getRoundsMissingTeamPairs(teamIds, rounds), [
+    {
+      roundId: 'round-1',
+      gameId: 'game-1',
+      missingPairs: [
+        ['team-a', 'team-c'],
+        ['team-a', 'team-d'],
+        ['team-b', 'team-c'],
+        ['team-b', 'team-d']
+      ]
+    }
+  ]);
 });
 
-test('getRequiredGameCountForFullMatchups describes minimum useful game counts', () => {
-  assert.equal(getRequiredGameCountForFullMatchups(1), 0);
-  assert.equal(getRequiredGameCountForFullMatchups(2), 1);
-  assert.equal(getRequiredGameCountForFullMatchups(3), 1);
-  assert.equal(getRequiredGameCountForFullMatchups(4), 3);
-  assert.equal(getRequiredGameCountForFullMatchups(5), 4);
-});
-
-test('createMatchups varies opponents across rounds', () => {
+test('createMatchups creates all team pairs', () => {
   const teamIds = ['team-a', 'team-b', 'team-c', 'team-d'];
 
   assert.deepEqual(createMatchups(teamIds, 0), [
-    { id: 'match-1-1', teamIds: ['team-a', 'team-d'] },
-    { id: 'match-1-2', teamIds: ['team-b', 'team-c'] }
-  ]);
-  assert.deepEqual(createMatchups(teamIds, 1), [
-    { id: 'match-2-1', teamIds: ['team-a', 'team-c'] },
-    { id: 'match-2-2', teamIds: ['team-d', 'team-b'] }
+    { id: 'match-1-1', teamIds: ['team-a', 'team-b'] },
+    { id: 'match-1-2', teamIds: ['team-a', 'team-c'] },
+    { id: 'match-1-3', teamIds: ['team-a', 'team-d'] },
+    { id: 'match-1-4', teamIds: ['team-b', 'team-c'] },
+    { id: 'match-1-5', teamIds: ['team-b', 'team-d'] },
+    { id: 'match-1-6', teamIds: ['team-c', 'team-d'] }
   ]);
 });
 
-test('createMatchups keeps odd team counts playing with one three-team matchup', () => {
+test('createMatchups creates all team pairs for odd team counts', () => {
   const matchups = createMatchups(['team-a', 'team-b', 'team-c', 'team-d', 'team-e'], 0);
 
   assert.deepEqual(matchups, [
-    { id: 'match-1-1', teamIds: ['team-a', 'team-e'] },
-    { id: 'match-1-2', teamIds: ['team-b', 'team-d', 'team-c'] }
+    { id: 'match-1-1', teamIds: ['team-a', 'team-b'] },
+    { id: 'match-1-2', teamIds: ['team-a', 'team-c'] },
+    { id: 'match-1-3', teamIds: ['team-a', 'team-d'] },
+    { id: 'match-1-4', teamIds: ['team-a', 'team-e'] },
+    { id: 'match-1-5', teamIds: ['team-b', 'team-c'] },
+    { id: 'match-1-6', teamIds: ['team-b', 'team-d'] },
+    { id: 'match-1-7', teamIds: ['team-b', 'team-e'] },
+    { id: 'match-1-8', teamIds: ['team-c', 'team-d'] },
+    { id: 'match-1-9', teamIds: ['team-c', 'team-e'] },
+    { id: 'match-1-10', teamIds: ['team-d', 'team-e'] }
   ]);
 });
 

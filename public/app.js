@@ -2,8 +2,7 @@ import {
   calculateStandings,
   createMatchups,
   generateGamePlan,
-  getMissingTeamPairs,
-  getRequiredGameCountForFullMatchups,
+  getRoundsMissingTeamPairs,
   normalizeRankPoints,
   resultKey
 } from './scheduler.js';
@@ -276,9 +275,15 @@ function renderPlan() {
         <span class="count-pill">${round.teamIds.length} ${pluralize('team', round.teamIds.length)}</span>
       </div>
       <div class="matchups"></div>
+      <section class="game-result">
+        <h4>Game result</h4>
+        <p class="hint">Enter the final ranking after all matchups for this game are done.</p>
+        <div class="team-results"></div>
+      </section>
     `;
 
     const matchups = roundCard.querySelector('.matchups');
+    const results = roundCard.querySelector('.team-results');
     const roundMatchups = round.matchups?.length
       ? round.matchups
       : createMatchups(round.teamIds, roundIndex);
@@ -291,38 +296,35 @@ function renderPlan() {
           <p class="eyebrow">Match ${matchupIndex + 1}</p>
           <h4>${matchup.teamIds.map((teamId) => escapeHtml(findById(state.teams, teamId)?.name ?? 'Removed team')).join(' vs ')}</h4>
         </div>
-        <div class="team-results"></div>
       `;
 
-      const results = matchupCard.querySelector('.team-results');
+      matchups.append(matchupCard);
+    });
 
-      matchup.teamIds.forEach((teamId) => {
-        const team = findById(state.teams, teamId);
-        const key = resultKey(round.gameId, teamId);
-        const row = document.createElement('label');
-        row.className = 'team-score-row';
-        row.innerHTML = `
-          <span>
-            <strong>${escapeHtml(team?.name ?? 'Removed team')}</strong>
-            ${team?.members?.length ? `<small class="team-members">${escapeHtml(team.members.join(', '))}</small>` : ''}
-          </span>
-          <select aria-label="Rank for ${escapeHtml(team?.name ?? 'team')}">
-            <option value="">Rank</option>
-            ${state.plan.teamIds.map((_, index) => `<option value="${index + 1}">${formatRank(index + 1)}</option>`).join('')}
-          </select>
-        `;
+    round.teamIds.forEach((teamId) => {
+      const team = findById(state.teams, teamId);
+      const key = resultKey(round.gameId, teamId);
+      const row = document.createElement('label');
+      row.className = 'team-score-row';
+      row.innerHTML = `
+        <span>
+          <strong>${escapeHtml(team?.name ?? 'Removed team')}</strong>
+          ${team?.members?.length ? `<small class="team-members">${escapeHtml(team.members.join(', '))}</small>` : ''}
+        </span>
+        <select aria-label="Rank for ${escapeHtml(team?.name ?? 'team')}">
+          <option value="">Rank</option>
+          ${state.plan.teamIds.map((_, index) => `<option value="${index + 1}">${formatRank(index + 1)}</option>`).join('')}
+        </select>
+      `;
 
-        const select = row.querySelector('select');
-        select.value = state.plan.results?.[key]?.rank ?? '';
-        select.addEventListener('change', () => {
-          state.plan.results[key] = { rank: select.value };
-          persistAndRender();
-        });
-
-        results.append(row);
+      const select = row.querySelector('select');
+      select.value = state.plan.results?.[key]?.rank ?? '';
+      select.addEventListener('change', () => {
+        state.plan.results[key] = { rank: select.value };
+        persistAndRender();
       });
 
-      matchups.append(matchupCard);
+      results.append(row);
     });
 
     elements.roundsList.append(roundCard);
@@ -443,16 +445,17 @@ function getPlanWarning() {
     return 'Some games were added after this plan was generated. Regenerate rounds to include them.';
   }
 
-  const missingPairs = getMissingTeamPairs(state.plan.teamIds, state.plan.rounds);
+  const roundsMissingPairs = getRoundsMissingTeamPairs(state.plan.teamIds, state.plan.rounds);
 
-  if (missingPairs.length > 0) {
-    const requiredGames = getRequiredGameCountForFullMatchups(state.plan.teamIds.length);
-    const examples = missingPairs
+  if (roundsMissingPairs.length > 0) {
+    const firstRoundWithMissingPairs = roundsMissingPairs[0];
+    const game = findById(state.games, firstRoundWithMissingPairs.gameId);
+    const examples = firstRoundWithMissingPairs.missingPairs
       .slice(0, 3)
       .map((pair) => pair.map((teamId) => findById(state.teams, teamId)?.name ?? 'Removed team').join(' vs '))
       .join(', ');
 
-    return `Not every team plays every other team yet. Add at least ${requiredGames} games for ${state.plan.teamIds.length} teams, then regenerate. Missing: ${examples}${missingPairs.length > 3 ? ', ...' : ''}`;
+    return `${game?.name ?? 'A game'} does not include every team-vs-team matchup yet. Regenerate the plan. Missing: ${examples}${firstRoundWithMissingPairs.missingPairs.length > 3 ? ', ...' : ''}`;
   }
 
   return '';

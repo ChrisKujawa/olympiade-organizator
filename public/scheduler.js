@@ -79,54 +79,31 @@ export function normalizeRankPoints(rankPoints, teamCount) {
   ];
 }
 
-export function getMissingTeamPairs(teamIds, rounds) {
-  const playedPairs = new Set();
+export function getRoundsMissingTeamPairs(teamIds, rounds) {
+  const allPairs = createPairs(teamIds);
 
-  rounds.forEach((round) => {
-    (round.matchups ?? []).forEach((matchup) => {
-      createPairs(matchup.teamIds).forEach((pair) => playedPairs.add(pairKey(pair)));
-    });
-  });
+  return rounds
+    .map((round) => {
+      const playedPairs = new Set();
 
-  return createPairs(teamIds).filter((pair) => !playedPairs.has(pairKey(pair)));
-}
+      (round.matchups ?? []).forEach((matchup) => {
+        createPairs(matchup.teamIds).forEach((pair) => playedPairs.add(pairKey(pair)));
+      });
 
-export function getRequiredGameCountForFullMatchups(teamCount) {
-  if (teamCount <= 1) {
-    return 0;
-  }
-
-  if (teamCount <= 3) {
-    return 1;
-  }
-
-  return teamCount - 1;
+      return {
+        roundId: round.id,
+        gameId: round.gameId,
+        missingPairs: allPairs.filter((pair) => !playedPairs.has(pairKey(pair)))
+      };
+    })
+    .filter((round) => round.missingPairs.length > 0);
 }
 
 export function createMatchups(teamIds, roundIndex = 0) {
-  if (teamIds.length <= 1) {
-    return teamIds.length === 0
-      ? []
-      : [{ id: `match-${roundIndex + 1}-1`, teamIds: [...teamIds] }];
-  }
-
-  const orderedTeamIds = rotateForRoundRobin(teamIds, roundIndex);
-  const matchups = [];
-
-  for (let leftIndex = 0; leftIndex < Math.floor(orderedTeamIds.length / 2); leftIndex += 1) {
-    const rightIndex = orderedTeamIds.length - 1 - leftIndex;
-    matchups.push({
-      id: `match-${roundIndex + 1}-${matchups.length + 1}`,
-      teamIds: [orderedTeamIds[leftIndex], orderedTeamIds[rightIndex]]
-    });
-  }
-
-  if (orderedTeamIds.length % 2 === 1) {
-    const remainingTeamId = orderedTeamIds[Math.floor(orderedTeamIds.length / 2)];
-    matchups[matchups.length - 1].teamIds.push(remainingTeamId);
-  }
-
-  return matchups;
+  return createPairs(teamIds).map((teamPair, pairIndex) => ({
+    id: `match-${roundIndex + 1}-${pairIndex + 1}`,
+    teamIds: teamPair
+  }));
 }
 
 function createPairs(teamIds) {
@@ -154,21 +131,6 @@ function shuffle(items, rng) {
   }
 
   return shuffled;
-}
-
-function rotateForRoundRobin(teamIds, roundIndex) {
-  if (teamIds.length <= 2) {
-    return [...teamIds];
-  }
-
-  const [anchor, ...rotatingTeamIds] = teamIds;
-  const shift = roundIndex % rotatingTeamIds.length;
-  const rotatedTeamIds = [
-    ...rotatingTeamIds.slice(rotatingTeamIds.length - shift),
-    ...rotatingTeamIds.slice(0, rotatingTeamIds.length - shift)
-  ];
-
-  return [anchor, ...rotatedTeamIds];
 }
 
 function createId() {
