@@ -19,6 +19,7 @@ export function generateGamePlan(teams, games, options = {}) {
     gameIds: activeGames.map((game) => game.id),
     teamIds: activeTeams.map((team) => team.id),
     rankPoints: createDefaultRankPoints(activeTeams.length),
+    matchResults: {},
     results: {},
     rounds: activeGames.map((game, roundIndex) => ({
       id: `round-${roundIndex + 1}`,
@@ -41,6 +42,13 @@ export function calculateStandings(teams, plan) {
     .filter((team) => plan.teamIds.includes(team.id))
     .map((team) => {
       const total = plan.gameIds.reduce((sum, gameId) => {
+        const gameResults = calculateGameResults(plan, gameId);
+        const gameResult = gameResults.find((result) => result.teamId === team.id);
+
+        if (gameResults.some((result) => result.hasScore)) {
+          return sum + (gameResult?.points ?? 0);
+        }
+
         const result = plan.results?.[resultKey(gameId, team.id)];
         const rank = Number(result?.rank);
         const points = Number.isInteger(rank) && rank > 0 ? rankPoints[rank - 1] ?? 0 : 0;
@@ -56,8 +64,57 @@ export function calculateStandings(teams, plan) {
     .sort((left, right) => right.total - left.total || left.name.localeCompare(right.name));
 }
 
+export function calculateGameResults(plan, gameId) {
+  const round = plan?.rounds?.find((candidate) => candidate.gameId === gameId);
+
+  if (!round) {
+    return [];
+  }
+
+  const totals = new Map(round.teamIds.map((teamId) => [teamId, { teamId, score: 0, hasScore: false }]));
+
+  (round.matchups ?? []).forEach((matchup) => {
+    matchup.teamIds.forEach((teamId) => {
+      const result = plan.matchResults?.[matchResultKey(gameId, matchup.id, teamId)];
+      const score = Number(result?.score);
+
+      if (!Number.isFinite(score)) {
+        return;
+      }
+
+      const total = totals.get(teamId);
+      total.score += score;
+      total.hasScore = true;
+    });
+  });
+
+  const rankPoints = normalizeRankPoints(plan.rankPoints, round.teamIds.length);
+  const rankedResults = [...totals.values()]
+    .sort((left, right) => right.score - left.score || left.teamId.localeCompare(right.teamId));
+
+  let previousScore = null;
+  let currentRank = 0;
+
+  return rankedResults.map((result, index) => {
+    if (previousScore !== result.score) {
+      currentRank = index + 1;
+      previousScore = result.score;
+    }
+
+    return {
+      ...result,
+      rank: currentRank,
+      points: result.hasScore ? rankPoints[currentRank - 1] ?? 0 : 0
+    };
+  });
+}
+
 export function resultKey(gameId, teamId) {
   return `${gameId}:${teamId}`;
+}
+
+export function matchResultKey(gameId, matchId, teamId) {
+  return `${gameId}:${matchId}:${teamId}`;
 }
 
 export function createDefaultRankPoints(teamCount) {

@@ -1,10 +1,11 @@
 import {
+  calculateGameResults,
   calculateStandings,
   createMatchups,
   generateGamePlan,
   getRoundsMissingTeamPairs,
+  matchResultKey,
   normalizeRankPoints,
-  resultKey
 } from './scheduler.js';
 
 const storageKey = 'olympiade-organizator:v1';
@@ -252,6 +253,9 @@ function renderPlan() {
     return;
   }
 
+  state.plan.matchResults ??= {};
+  state.plan.results ??= {};
+
   const warning = getPlanWarning();
 
   if (warning) {
@@ -290,6 +294,7 @@ function renderPlan() {
     const roundMatchups = round.matchups?.length
       ? round.matchups
       : createMatchups(round.teamIds, roundIndex);
+    const gameResults = calculateGameResults(state.plan, round.gameId);
 
     roundMatchups.forEach((matchup, matchupIndex) => {
       const matchupCard = document.createElement('section');
@@ -299,36 +304,55 @@ function renderPlan() {
           <p class="eyebrow">Match ${matchupIndex + 1}</p>
           <h4>${matchup.teamIds.map((teamId) => escapeHtml(findById(state.teams, teamId)?.name ?? 'Removed team')).join(' vs ')}</h4>
         </div>
+        <div class="team-results"></div>
       `;
+
+      const matchResults = matchupCard.querySelector('.team-results');
+
+      matchup.teamIds.forEach((teamId) => {
+        const team = findById(state.teams, teamId);
+        const key = matchResultKey(round.gameId, matchup.id, teamId);
+        const row = document.createElement('label');
+        row.className = 'team-score-row';
+        row.innerHTML = `
+          <span>
+            <strong>${escapeHtml(team?.name ?? 'Removed team')}</strong>
+            ${team?.members?.length ? `<small class="team-members">${escapeHtml(team.members.join(', '))}</small>` : ''}
+          </span>
+          <input inputmode="decimal" aria-label="Match score for ${escapeHtml(team?.name ?? 'team')}" placeholder="Score">
+        `;
+
+        const input = row.querySelector('input');
+        input.value = state.plan.matchResults?.[key]?.score ?? '';
+        input.addEventListener('change', () => {
+          state.plan.matchResults[key] = { score: input.value };
+          persistAndRender();
+        });
+
+        matchResults.append(row);
+      });
 
       matchups.append(matchupCard);
     });
 
-    round.teamIds.forEach((teamId) => {
-      const team = findById(state.teams, teamId);
-      const key = resultKey(round.gameId, teamId);
-      const row = document.createElement('label');
-      row.className = 'team-score-row';
-      row.innerHTML = `
-        <span>
-          <strong>${escapeHtml(team?.name ?? 'Removed team')}</strong>
-          ${team?.members?.length ? `<small class="team-members">${escapeHtml(team.members.join(', '))}</small>` : ''}
-        </span>
-        <select aria-label="Rank for ${escapeHtml(team?.name ?? 'team')}">
-          <option value="">Rank</option>
-          ${state.plan.teamIds.map((_, index) => `<option value="${index + 1}">${formatRank(index + 1)}</option>`).join('')}
-        </select>
-      `;
-
-      const select = row.querySelector('select');
-      select.value = state.plan.results?.[key]?.rank ?? '';
-      select.addEventListener('change', () => {
-        state.plan.results[key] = { rank: select.value };
-        persistAndRender();
+    if (gameResults.some((gameResult) => gameResult.hasScore)) {
+      gameResults.forEach((gameResult) => {
+        const team = findById(state.teams, gameResult.teamId);
+        const row = document.createElement('div');
+        row.className = 'team-score-row';
+        row.innerHTML = `
+          <span><strong>${formatRank(gameResult.rank)} ${escapeHtml(team?.name ?? 'Removed team')}</strong></span>
+          <span>${gameResult.score.toLocaleString()} score / ${gameResult.points.toLocaleString()} pts</span>
+        `;
+        results.append(row);
       });
+    } else {
+      const empty = document.createElement('p');
+      empty.className = 'hint';
+      empty.textContent = 'Enter matchup scores to calculate this game result.';
+      results.append(empty);
+    }
 
-      results.append(row);
-    });
 
     elements.roundsList.append(roundCard);
   });
@@ -348,7 +372,7 @@ function createScoringCard() {
       </div>
       <span class="count-pill">Editable</span>
     </div>
-    <p class="hint">After each game, choose each team's rank. These point values are added to the standings.</p>
+    <p class="hint">Enter scores for every matchup. The app totals each game, ranks teams automatically, and adds these ranking points to the standings.</p>
     <div class="rank-points"></div>
   `;
 

@@ -255,7 +255,7 @@ main {
 .team-score-row,
 .standing-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 6rem;
+  grid-template-columns: minmax(0, 1fr) 8.5rem;
   gap: 0.65rem;
   align-items: center;
 }
