@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Olympiade Organizator icon">
+  <rect width="512" height="512" rx="112" fill="#12213f"/>
+  <circle cx="176" cy="188" r="64" fill="#ffd166"/>
+  <circle cx="336" cy="188" r="64" fill="#5eead4"/>
+  <path fill="#ffffff" d="M128 344c0-50 41-91 91-91h74c50 0 91 41 91 91v25H128z"/>
+  <path fill="#2557d6" d="M177 344c0-24 19-43 43-43h72c24 0 43 19 43 43v25H177z"/>
+</svg>

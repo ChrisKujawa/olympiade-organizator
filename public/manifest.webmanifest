@@ -1,0 +1,19 @@
+{
+  "name": "Olympiade Organizator",
+  "short_name": "Olympiade",
+  "description": "Offline organizer for personal olympiades with teams, games, rounds, and scores.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#12213f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

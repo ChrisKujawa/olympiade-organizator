@@ -1,0 +1,13 @@
+{
+  "name": "olympiade-organizator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "check": "for file in public/*.js scripts/*.mjs tests/*.js; do node --check \"$file\"; done && node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
