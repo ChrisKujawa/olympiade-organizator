@@ -35,7 +35,7 @@ The CI workflow validates the app on pull requests and pushes to `main`. The Git
 
 ## Dependency updates
 
-Renovate is configured in `renovate.json`. Minor, patch, pin, digest, and lockfile-maintenance updates for npm and GitHub Actions enable GitHub auto-merge after the protected `main` branch's required CI `check` passes on the pull request. Major updates stay manual.
+Renovate is configured in `renovate.json`. npm and GitHub Actions updates, including major updates, enable GitHub auto-merge after the protected `main` branch's required CI `check` passes on the pull request.
 
 ## Validate
 
