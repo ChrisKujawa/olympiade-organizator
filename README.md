@@ -16,7 +16,7 @@ Then open <http://localhost:4173>.
 
 ## Deploy on GitHub Pages
 
-The included GitHub Actions workflow validates the app on pull requests to `main` and deploys the static `public/` directory to GitHub Pages on pushes to `main`.
+The CI workflow validates the app on pull requests and pushes to `main`. The GitHub Pages workflow deploys the static `public/` directory after CI succeeds on `main`.
 
 ## Features
 
@@ -35,7 +35,7 @@ The included GitHub Actions workflow validates the app on pull requests to `main
 
 ## Dependency updates
 
-Renovate is configured in `renovate.json`. Minor, patch, pin, digest, and lockfile-maintenance updates for npm and GitHub Actions are set to automerge after pull-request checks pass. Major updates stay manual.
+Renovate is configured in `renovate.json`. Minor, patch, pin, digest, and lockfile-maintenance updates for npm and GitHub Actions are set to automerge after CI passes on the pull request. Major updates stay manual.
 
 ## Validate
 
