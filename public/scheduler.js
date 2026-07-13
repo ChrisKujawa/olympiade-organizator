@@ -70,6 +70,73 @@ export function calculateStandings(teams, plan) {
     .sort((left, right) => right.total - left.total || left.name.localeCompare(right.name));
 }
 
+export function calculateProgressionStats(teams, games, plan) {
+  if (!plan?.teamIds?.length || !plan?.gameIds?.length) {
+    return [];
+  }
+
+  const teamLookup = new Map(teams.map((team) => [team.id, team]));
+  const gameLookup = new Map(games.map((game) => [game.id, game]));
+  const cumulative = new Map(
+    plan.teamIds.map((teamId) => [teamId, { teamId, total: 0, wins: 0, losses: 0 }])
+  );
+
+  return plan.gameIds.map((gameId, gameIndex) => {
+    const gameResults = calculateGameResults(plan, gameId);
+    const hasResult = gameResults.some((result) => result.hasResult);
+
+    if (hasResult) {
+      gameResults.forEach((gameResult) => {
+        const teamTotal = cumulative.get(gameResult.teamId);
+
+        if (!teamTotal) {
+          return;
+        }
+
+        teamTotal.total += gameResult.points;
+        teamTotal.wins += gameResult.wins;
+        teamTotal.losses += gameResult.losses;
+      });
+    }
+
+    const standings = plan.teamIds
+      .map((teamId) => {
+        const teamTotal = cumulative.get(teamId) ?? { teamId, total: 0, wins: 0, losses: 0 };
+        const gameResult = gameResults.find((result) => result.teamId === teamId);
+
+        return {
+          teamId,
+          name: teamLookup.get(teamId)?.name ?? 'Removed team',
+          gamePoints: hasResult ? gameResult?.points ?? 0 : 0,
+          gameWins: hasResult ? gameResult?.wins ?? 0 : 0,
+          gameLosses: hasResult ? gameResult?.losses ?? 0 : 0,
+          total: teamTotal.total,
+          wins: teamTotal.wins,
+          losses: teamTotal.losses
+        };
+      })
+      .sort((left, right) =>
+        right.total - left.total
+        || right.wins - left.wins
+        || left.losses - right.losses
+        || left.name.localeCompare(right.name)
+      );
+
+    const leaderTotal = standings[0]?.total ?? 0;
+    const leaders = standings.filter((standing) => standing.total === leaderTotal);
+
+    return {
+      gameId,
+      gameNumber: gameIndex + 1,
+      gameName: gameLookup.get(gameId)?.name ?? `Game ${gameIndex + 1}`,
+      hasResult,
+      standings,
+      leaders,
+      isTie: leaders.length > 1
+    };
+  });
+}
+
 export function calculateGameResults(plan, gameId) {
   const round = plan?.rounds?.find((candidate) => candidate.gameId === gameId);
 

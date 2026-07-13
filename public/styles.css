@@ -183,14 +183,18 @@ main {
 .stacked-form,
 .card-list,
 .rounds,
-.standings {
+.standings,
+.statistics,
+.stat-rows {
   display: grid;
   gap: 0.75rem;
 }
 
 .data-card,
 .round-card,
-.standing-row {
+.standing-row,
+.stat-card,
+.tie-breaker-card {
   display: grid;
   gap: 0.8rem;
   border: 1px solid var(--border);
@@ -234,9 +238,16 @@ main {
   grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
 }
 
+.tie-breaker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
 .game-result,
 .station-card,
-.matchup-card {
+.matchup-card,
+.tie-breaker-card {
   display: grid;
   gap: 0.65rem;
   border-radius: 1rem;
@@ -249,7 +260,9 @@ main {
 .game-result h4,
 .game-result p,
 .matchup-card h4,
-.matchup-card p {
+.matchup-card p,
+.tie-breaker-card h3,
+.tie-breaker-card p {
   margin: 0;
 }
 
@@ -279,6 +292,36 @@ main {
 
 .team-score-row input {
   text-align: right;
+}
+
+.stat-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.stat-row-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.stat-row-header span,
+.stat-row small {
+  color: var(--muted);
+}
+
+.stat-bar {
+  overflow: hidden;
+  height: 0.65rem;
+  border-radius: 999px;
+  background: #e6ecf8;
+}
+
+.stat-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), #6d8dff);
 }
 
 .team-members,
@@ -345,7 +388,8 @@ main {
   }
 
   .team-score-row,
-  .standing-row {
+  .standing-row,
+  .tie-breaker-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -1,5 +1,6 @@
 import {
   calculateGameResults,
+  calculateProgressionStats,
   calculateStandings,
   createMatchups,
   generateGamePlan,
@@ -10,6 +11,8 @@ import {
   PLAY_MODES,
 } from './scheduler.js';
 import {
+  addGameToExistingPlan,
+  addTieBreakerMatch,
   addGame,
   addTeam,
   createEmptyState,
@@ -46,6 +49,12 @@ const elements = {
   generatePlan: document.querySelector('#generate-plan'),
   roundsList: document.querySelector('#rounds-list'),
   standingsList: document.querySelector('#standings-list'),
+  statisticsList: document.querySelector('#statistics-list'),
+  tieBreakerCard: document.querySelector('#tiebreaker-card'),
+  tieBreakerName: document.querySelector('#tiebreaker-name'),
+  tieBreakerTeamA: document.querySelector('#tiebreaker-team-a'),
+  tieBreakerTeamB: document.querySelector('#tiebreaker-team-b'),
+  addTieBreaker: document.querySelector('#add-tiebreaker'),
   planWarning: document.querySelector('#plan-warning'),
   installButton: document.querySelector('#install-button'),
   connectionStatus: document.querySelector('#connection-status'),
@@ -80,10 +89,13 @@ elements.gameForm.addEventListener('submit', (event) => {
     return;
   }
 
-  state = addGame(state, createGame(name, elements.gameNotes.value, elements.gamePlayMode.value));
+  const game = createGame(name, elements.gameNotes.value, elements.gamePlayMode.value);
+  const hadPlan = Boolean(state.plan);
+
+  state = hadPlan ? addGameToExistingPlan(state, game) : addGame(state, game);
 
   elements.gameForm.reset();
-  persistAndRender('Game added.');
+  persistAndRender(hadPlan ? 'Game added to current plan.' : 'Game added.');
 });
 
 elements.generatePlan.addEventListener('click', () => {
@@ -132,6 +144,26 @@ elements.resetData.addEventListener('click', () => {
   persistAndRender('All local data removed.');
 });
 
+elements.tieBreakerTeamA.addEventListener('change', updateTieBreakerButtonState);
+elements.tieBreakerTeamB.addEventListener('change', updateTieBreakerButtonState);
+
+elements.addTieBreaker.addEventListener('click', () => {
+  const teamIds = [elements.tieBreakerTeamA.value, elements.tieBreakerTeamB.value];
+
+  if (!state.plan || teamIds[0] === teamIds[1]) {
+    elements.storageStatus.textContent = 'Choose two different planned teams for the tie-breaker. Saved locally on this device.';
+    return;
+  }
+
+  state = addTieBreakerMatch(
+    state,
+    teamIds,
+    elements.tieBreakerName.value.trim() || 'Overtime tie-breaker'
+  );
+  elements.tieBreakerName.value = '';
+  persistAndRender('Tie-breaker match added.');
+});
+
 elements.installButton.addEventListener('click', async () => {
   if (!installPrompt) {
     return;
@@ -160,6 +192,8 @@ function render() {
   renderGames();
   renderPlan();
   renderStandings();
+  renderTieBreakerControls();
+  renderStatistics();
   updateConnectionStatus();
   elements.generatePlan.disabled = state.teams.length === 0 || state.games.length === 0;
   elements.generatePlan.textContent = state.plan ? 'Regenerate rounds' : 'Generate rounds';
@@ -449,6 +483,97 @@ function renderStandings() {
       <span>${standing.total.toLocaleString()}</span>
     `;
     elements.standingsList.append(row);
+  });
+}
+
+function renderTieBreakerControls() {
+  const plannedTeams = state.plan?.teamIds
+    ?.map((teamId) => findById(state.teams, teamId))
+    .filter(Boolean) ?? [];
+
+  if (!state.plan || plannedTeams.length < 2) {
+    elements.tieBreakerCard.classList.add('hidden');
+    return;
+  }
+
+  const standings = calculateStandings(state.teams, state.plan);
+  const leaderTotal = standings[0]?.total ?? 0;
+  const tiedLeaders = standings
+    .filter((standing) => standing.total === leaderTotal)
+    .map((standing) => standing.teamId);
+  const defaultTeamIds = tiedLeaders.length >= 2
+    ? tiedLeaders
+    : plannedTeams.map((team) => team.id);
+
+  const options = plannedTeams
+    .map((team) => `<option value="${escapeHtml(team.id)}">${escapeHtml(team.name)}</option>`)
+    .join('');
+
+  elements.tieBreakerTeamA.innerHTML = options;
+  elements.tieBreakerTeamB.innerHTML = options;
+  elements.tieBreakerTeamA.value = defaultTeamIds[0] ?? plannedTeams[0].id;
+  elements.tieBreakerTeamB.value = defaultTeamIds.find((teamId) => teamId !== elements.tieBreakerTeamA.value) ?? plannedTeams[1].id;
+  elements.tieBreakerCard.classList.remove('hidden');
+  updateTieBreakerButtonState();
+}
+
+function updateTieBreakerButtonState() {
+  elements.addTieBreaker.disabled = !state.plan
+    || !elements.tieBreakerTeamA.value
+    || !elements.tieBreakerTeamB.value
+    || elements.tieBreakerTeamA.value === elements.tieBreakerTeamB.value;
+}
+
+function renderStatistics() {
+  elements.statisticsList.innerHTML = '';
+
+  const stats = calculateProgressionStats(state.teams, state.games, state.plan);
+  const playedStats = stats.filter((step) => step.hasResult);
+
+  if (playedStats.length === 0) {
+    elements.statisticsList.textContent = state.plan
+      ? 'Enter match winners to see the point progression.'
+      : 'Generate a plan and enter match winners to see the point progression.';
+    elements.statisticsList.classList.add('empty-list');
+    return;
+  }
+
+  elements.statisticsList.classList.remove('empty-list');
+  const maxTotal = Math.max(...playedStats.flatMap((step) => step.standings.map((standing) => standing.total)), 1);
+
+  playedStats.forEach((step, stepIndex) => {
+    const card = document.createElement('article');
+    card.className = 'stat-card';
+    const leaderNames = step.leaders.map((leader) => leader.name).join(', ');
+    card.innerHTML = `
+      <div class="round-header">
+        <div>
+          <p class="eyebrow">${stepIndex === playedStats.length - 1 ? 'End result' : `After game ${step.gameNumber}`}</p>
+          <h3>${escapeHtml(step.gameName)}</h3>
+        </div>
+        <span class="count-pill">${step.isTie ? `Draw: ${escapeHtml(leaderNames)}` : `Leader: ${escapeHtml(leaderNames)}`}</span>
+      </div>
+      <div class="stat-rows"></div>
+    `;
+
+    const rows = card.querySelector('.stat-rows');
+
+    step.standings.forEach((standing) => {
+      const width = Math.max((standing.total / maxTotal) * 100, standing.total > 0 ? 4 : 0);
+      const row = document.createElement('div');
+      row.className = 'stat-row';
+      row.innerHTML = `
+        <div class="stat-row-header">
+          <strong>${escapeHtml(standing.name)}</strong>
+          <span>+${standing.gamePoints.toLocaleString()} / ${standing.total.toLocaleString()} pts</span>
+        </div>
+        <div class="stat-bar" aria-hidden="true"><span style="width: ${width.toFixed(1)}%"></span></div>
+        <small>${standing.gameWins}-${standing.gameLosses} this game · ${standing.wins}-${standing.losses} overall</small>
+      `;
+      rows.append(row);
+    });
+
+    elements.statisticsList.append(card);
   });
 }
 

@@ -87,7 +87,7 @@
           </div>
           <button id="generate-plan" type="button">Generate rounds</button>
         </div>
-        <p class="hint">One game is played at a time. In every game, every team plays against every other team and you can choose each matchup winner.</p>
+        <p class="hint">One game is played at a time. Choose matchup winners and the app keeps the standings from the saved results.</p>
         <div id="plan-warning" class="notice hidden"></div>
         <div id="rounds-list" class="rounds empty-list">Add at least one team and one game to create a plan.</div>
       </section>
@@ -100,6 +100,39 @@
           </div>
         </div>
         <div id="standings-list" class="standings empty-list">Scores appear after you generate a plan.</div>
+        <div id="tiebreaker-card" class="tie-breaker-card hidden">
+          <div>
+            <p class="eyebrow">Overtime</p>
+            <h3>Tie-breaker match</h3>
+            <p class="hint">Add one extra match to the current plan without resetting existing results.</p>
+          </div>
+          <label>
+            Match name
+            <input id="tiebreaker-name" autocomplete="off" placeholder="e.g. Overtime final">
+          </label>
+          <div class="tie-breaker-grid">
+            <label>
+              Team 1
+              <select id="tiebreaker-team-a"></select>
+            </label>
+            <label>
+              Team 2
+              <select id="tiebreaker-team-b"></select>
+            </label>
+          </div>
+          <button id="add-tiebreaker" type="button">Add tie-breaker match</button>
+        </div>
+      </section>
+
+      <section class="panel wide">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Statistics</p>
+            <h2>Points over time</h2>
+          </div>
+        </div>
+        <p class="hint">Built from the current saved winners, including overtime or tie-breaker matches.</p>
+        <div id="statistics-list" class="statistics empty-list">Enter match winners to see the point progression.</div>
       </section>
 
       <section class="panel">

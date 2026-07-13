@@ -1,4 +1,10 @@
-import { getRoundsMissingTeamPairs, normalizePlayMode, normalizeRankPoints } from './scheduler.js';
+import {
+  createGameMatchups,
+  getRoundsMissingTeamPairs,
+  normalizePlayMode,
+  normalizeRankPoints,
+  PLAY_MODES
+} from './scheduler.js';
 
 export function createEmptyState() {
   return {
@@ -36,6 +42,40 @@ export function addGame(state, game) {
   return {
     ...state,
     games: [...state.games, game]
+  };
+}
+
+export function addGameToExistingPlan(state, game) {
+  const nextState = addGame(state, game);
+
+  if (!nextState.plan) {
+    return nextState;
+  }
+
+  return {
+    ...nextState,
+    plan: appendGameToPlan(nextState.plan, game, nextState.plan.teamIds)
+  };
+}
+
+export function addTieBreakerMatch(state, teamIds, name = 'Overtime tie-breaker', createId = createStateId) {
+  if (!state.plan) {
+    throw new Error('Generate a game plan before adding a tie-breaker match.');
+  }
+
+  const selectedTeamIds = [...new Set(teamIds.map(String).filter(Boolean))];
+  const plannedTeamIds = new Set(state.plan.teamIds);
+
+  if (selectedTeamIds.length !== 2 || selectedTeamIds.some((teamId) => !plannedTeamIds.has(teamId))) {
+    throw new Error('Choose two planned teams for the tie-breaker match.');
+  }
+
+  const game = createGame(name, 'Overtime tie-breaker', PLAY_MODES.ROUND_ROBIN, createId);
+  const nextState = addGame(state, game);
+
+  return {
+    ...nextState,
+    plan: appendGameToPlan(nextState.plan, game, selectedTeamIds)
   };
 }
 
@@ -211,6 +251,34 @@ export function buildPlanWarning(state) {
   }
 
   return '';
+}
+
+export function appendGameToPlan(plan, game, teamIds) {
+  if (!plan) {
+    return null;
+  }
+
+  const nextPlan = normalizePlan(plan);
+  const roundIndex = nextPlan.rounds.length;
+  const roundTeamIds = [...new Set(teamIds.map(String).filter(Boolean))]
+    .filter((teamId) => nextPlan.teamIds.includes(teamId));
+
+  return {
+    ...nextPlan,
+    gameIds: [...nextPlan.gameIds, game.id],
+    rankPoints: normalizeRankPoints(nextPlan.rankPoints, nextPlan.teamIds.length),
+    rounds: [
+      ...nextPlan.rounds,
+      {
+        id: `round-${roundIndex + 1}`,
+        name: `Game ${roundIndex + 1}`,
+        gameId: game.id,
+        playMode: normalizePlayMode(game.playMode),
+        teamIds: roundTeamIds,
+        matchups: createGameMatchups(roundTeamIds, game.playMode, roundIndex)
+      }
+    ]
+  };
 }
 
 function normalizePlan(plan) {

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateGameResults,
+  calculateProgressionStats,
   calculateStandings,
   createGameMatchups,
   createKnockoutMatchups,
@@ -556,6 +557,56 @@ test('calculateStandings sums matchup-derived ranking points across games', () =
     { teamId: 'team-a', name: 'A', total: 3 },
     { teamId: 'team-b', name: 'B', total: 3 }
   ]);
+});
+
+test('calculateProgressionStats shows cumulative points and tie-breaker changes from existing results', () => {
+  const teams = [
+    { id: 'team-a', name: 'A' },
+    { id: 'team-b', name: 'B' },
+    { id: 'team-c', name: 'C' }
+  ];
+  const games = [
+    { id: 'game-1', name: 'First' },
+    { id: 'game-2', name: 'Second' },
+    { id: 'overtime', name: 'Overtime' }
+  ];
+  const gameOneMatchups = createMatchups(teams.map((team) => team.id), 0);
+  const gameTwoMatchups = createMatchups(teams.map((team) => team.id), 1);
+  const overtimeMatchups = createMatchups(['team-a', 'team-b'], 2);
+  const plan = {
+    teamIds: teams.map((team) => team.id),
+    gameIds: games.map((game) => game.id),
+    rankPoints: [3, 2, 1],
+    matchResults: {
+      [matchResultKey('game-1', gameOneMatchups[0].id)]: { winnerTeamId: 'team-a' },
+      [matchResultKey('game-1', gameOneMatchups[1].id)]: { winnerTeamId: 'team-a' },
+      [matchResultKey('game-1', gameOneMatchups[2].id)]: { winnerTeamId: 'team-b' },
+      [matchResultKey('game-2', gameTwoMatchups[0].id)]: { winnerTeamId: 'team-b' },
+      [matchResultKey('game-2', gameTwoMatchups[1].id)]: { winnerTeamId: 'team-a' },
+      [matchResultKey('game-2', gameTwoMatchups[2].id)]: { winnerTeamId: 'team-b' },
+      [matchResultKey('overtime', overtimeMatchups[0].id)]: { winnerTeamId: 'team-a' }
+    },
+    rounds: [
+      { id: 'round-1', gameId: 'game-1', teamIds: teams.map((team) => team.id), matchups: gameOneMatchups },
+      { id: 'round-2', gameId: 'game-2', teamIds: teams.map((team) => team.id), matchups: gameTwoMatchups },
+      { id: 'round-3', gameId: 'overtime', teamIds: ['team-a', 'team-b'], matchups: overtimeMatchups }
+    ]
+  };
+
+  const stats = calculateProgressionStats(teams, games, plan);
+
+  assert.equal(stats[1].isTie, true);
+  assert.deepEqual(stats[1].leaders.map((leader) => leader.teamId), ['team-a', 'team-b']);
+  assert.deepEqual(stats[2].standings.map((standing) => ({
+    teamId: standing.teamId,
+    gamePoints: standing.gamePoints,
+    total: standing.total
+  })), [
+    { teamId: 'team-a', gamePoints: 3, total: 8 },
+    { teamId: 'team-b', gamePoints: 2, total: 7 },
+    { teamId: 'team-c', gamePoints: 0, total: 2 }
+  ]);
+  assert.equal(stats[2].isTie, false);
 });
 
 test('result keys are stable and scoped to games and matches', () => {

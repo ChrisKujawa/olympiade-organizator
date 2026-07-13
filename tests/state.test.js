@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { generateGamePlan, matchResultKey, PLAY_MODES, resultKey } from '../public/scheduler.js';
 import {
   addGame,
+  addGameToExistingPlan,
   addTeam,
+  addTieBreakerMatch,
   buildPlanWarning,
   createEmptyState,
   createGame,
@@ -69,6 +71,56 @@ test('add and update game state', () => {
       notes: 'Final cup wins',
       playMode: PLAY_MODES.KNOCKOUT
     }
+  ]);
+});
+
+test('addGameToExistingPlan appends a new game without deleting existing results', () => {
+  const state = createPlannedState();
+  const existingResults = {
+    [matchResultKey('game-1', state.plan.rounds[0].matchups[0].id)]: { winnerTeamId: 'team-a' }
+  };
+  const stateWithResults = {
+    ...state,
+    plan: {
+      ...state.plan,
+      matchResults: existingResults
+    }
+  };
+  const nextState = addGameToExistingPlan(
+    stateWithResults,
+    createGame('Overtime', '', PLAY_MODES.KNOCKOUT, () => 'game-3')
+  );
+
+  assert.deepEqual(nextState.plan.matchResults, existingResults);
+  assert.deepEqual(nextState.plan.gameIds, ['game-1', 'game-2', 'game-3']);
+  assert.equal(nextState.plan.rounds.at(-1).gameId, 'game-3');
+  assert.equal(nextState.plan.rounds.at(-1).playMode, PLAY_MODES.KNOCKOUT);
+  assert.deepEqual(nextState.plan.rounds.at(-1).teamIds, ['team-a', 'team-b', 'team-c']);
+});
+
+test('addTieBreakerMatch appends a two-team overtime match and keeps existing results', () => {
+  const state = createPlannedState();
+  const existingResults = {
+    [matchResultKey('game-1', state.plan.rounds[0].matchups[0].id)]: { winnerTeamId: 'team-a' }
+  };
+  const nextState = addTieBreakerMatch({
+    ...state,
+    plan: {
+      ...state.plan,
+      matchResults: existingResults
+    }
+  }, ['team-a', 'team-b'], 'Overtime', () => 'overtime');
+
+  assert.deepEqual(nextState.plan.matchResults, existingResults);
+  assert.deepEqual(nextState.games.at(-1), {
+    id: 'overtime',
+    name: 'Overtime',
+    notes: 'Overtime tie-breaker',
+    playMode: PLAY_MODES.ROUND_ROBIN
+  });
+  assert.deepEqual(nextState.plan.rounds.at(-1).teamIds, ['team-a', 'team-b']);
+  assert.deepEqual(nextState.plan.rounds.at(-1).matchups, [
+    { id: 'match-3-1', bracketRound: 1, teamIds: ['team-a', 'team-b'] }
   ]);
 });
 
