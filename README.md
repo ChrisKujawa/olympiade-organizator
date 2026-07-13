@@ -16,7 +16,7 @@ Then open <http://localhost:4173>.
 
 ## Deploy on GitHub Pages
 
-The included GitHub Actions workflow validates the app and deploys the static `public/` directory to GitHub Pages on pushes to `main`.
+The included GitHub Actions workflow validates the app on pull requests to `main` and deploys the static `public/` directory to GitHub Pages on pushes to `main`.
 
 ## Features
 
@@ -27,10 +27,15 @@ The included GitHub Actions workflow validates the app and deploys the static `p
 - See generated matchups, including knockout bracket rounds and byes.
 - Show the players for both teams directly in every matchup.
 - Choose the winner for every matchup and let the app calculate game rankings.
-- Enter ranking results after each game with editable ranking points.
-- See automatic standings.
+- See automatic standings with editable ranking points.
+- Add an overtime tie-breaker match without resetting existing results.
+- See point progression over time and final statistics from saved match winners.
 - Export/import event data as JSON for backup or moving to another device.
 - Install on a phone as an offline-capable PWA.
+
+## Dependency updates
+
+Renovate is configured in `renovate.json`. Minor, patch, pin, digest, and lockfile-maintenance updates for npm and GitHub Actions are set to automerge after pull-request checks pass. Major updates stay manual.
 
 ## Validate
 
