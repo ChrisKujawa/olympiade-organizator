@@ -14,27 +14,14 @@
   "prHourlyLimit": 2,
   "packageRules": [
     {
-      "description": "Automerge safe dependency and GitHub Actions updates after checks pass",
+      "description": "Automerge dependency and GitHub Actions updates after checks pass",
       "matchManagers": [
         "npm",
         "github-actions"
       ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "pin",
-        "digest"
-      ],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
-    },
-    {
-      "description": "Keep major updates manual",
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "automerge": false
     }
   ],
   "lockFileMaintenance": {
