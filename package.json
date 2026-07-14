@@ -8,6 +8,6 @@
     "check": "for file in public/*.js scripts/*.mjs tests/*.js; do node --check \"$file\"; done && node --test"
   },
   "engines": {
-    "node": ">=18.20.8"
+    "node": ">=24.18.0"
   }
 }
